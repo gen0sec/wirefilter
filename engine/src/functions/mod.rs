@@ -1,15 +1,17 @@
 pub(crate) mod all;
 pub(crate) mod any;
 pub(crate) mod concat;
+pub(crate) mod lower;
 
-pub use self::all::AllFunction;
-pub use self::any::AnyFunction;
-pub use self::concat::ConcatFunction;
-use crate::ParserSettings;
-use crate::filter::CompiledValueResult;
-use crate::types::{
-    ExpectedType, ExpectedTypeList, GetType, LhsValue, RhsValue, Type, TypeMismatchError,
+use crate::{
+    ParserSettings,
+    filter::CompiledValueResult,
+    types::{ExpectedType, ExpectedTypeList, GetType, LhsValue, RhsValue, Type, TypeMismatchError},
 };
+pub use all::AllFunction;
+pub use any::AnyFunction;
+pub use concat::ConcatFunction;
+pub use lower::LowerFunction;
 use std::any::Any;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug};

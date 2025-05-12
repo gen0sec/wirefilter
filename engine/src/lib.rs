@@ -79,47 +79,49 @@ mod searcher;
 mod strict_partial_ord;
 mod types;
 
-pub use self::ast::field_expr::{
-    ComparisonExpr, ComparisonOpExpr, IdentifierExpr, IntOp, OrderingOp,
-};
-pub use self::ast::function_expr::{FunctionCallArgExpr, FunctionCallExpr};
-pub use self::ast::index_expr::{Compare, IndexExpr};
-pub use self::ast::logical_expr::{LogicalExpr, LogicalOp, ParenthesizedExpr, UnaryOp};
-pub use self::ast::parse::{FilterParser, ParseError, ParserSettings};
-pub use self::ast::visitor::{Visitor, VisitorMut};
-pub use self::ast::{Expr, FilterAst, FilterValueAst, ValueExpr};
-pub use self::compiler::{Compiler, DefaultCompiler};
-pub use self::execution_context::{
-    ExecutionContext, ExecutionContextGuard, InvalidListMatcherError, SetFieldValueError,
-};
-pub use self::filter::{
-    CompiledExpr, CompiledOneExpr, CompiledValueExpr, CompiledVecExpr, Filter, FilterValue,
-};
-pub use self::functions::{
-    AllFunction, AnyFunction, ConcatFunction, FunctionArgInvalidConstantError, FunctionArgKind,
-    FunctionArgKindMismatchError, FunctionArgs, FunctionDefinition, FunctionDefinitionContext,
-    FunctionParam, FunctionParamError, SimpleFunctionArgKind, SimpleFunctionDefinition,
-    SimpleFunctionImpl, SimpleFunctionOptParam, SimpleFunctionParam,
-};
-pub use self::lex::LexErrorKind;
-pub use self::lhs_types::{Array, Bytes, Map, MapIter, TypedArray, TypedMap};
-pub use self::list_matcher::{
-    AlwaysList, AlwaysListMatcher, ListDefinition, ListMatcher, NeverList, NeverListMatcher,
-};
-pub use self::panic::{
-    PanicCatcherFallbackMode, catch_panic, panic_catcher_disable, panic_catcher_enable,
-    panic_catcher_get_backtrace, panic_catcher_set_fallback_mode, panic_catcher_set_hook,
-};
-pub use self::rhs_types::{
-    BytesExpr, BytesFormat, ExplicitIpRange, IntRange, IpCidr, IpRange, Regex, RegexError,
-    RegexFormat,
-};
-pub use self::scheme::{
-    Field, FieldIndex, FieldRedefinitionError, FieldRef, Function, FunctionRedefinitionError,
-    FunctionRef, IdentifierRedefinitionError, IndexAccessError, List, ListRef, Scheme,
-    SchemeBuilder, SchemeMismatchError, UnknownFieldError,
-};
-pub use self::types::{
-    CompoundType, ExpectedType, ExpectedTypeList, GetType, LhsValue, RhsValue, RhsValues, Type,
-    TypeMismatchError,
+pub use self::{
+    ast::{
+        Expr, FilterAst, FilterValueAst, ValueExpr,
+        field_expr::{ComparisonExpr, ComparisonOpExpr, IdentifierExpr, IntOp, OrderingOp},
+        function_expr::{FunctionCallArgExpr, FunctionCallExpr},
+        index_expr::{Compare, IndexExpr},
+        logical_expr::{LogicalExpr, LogicalOp, ParenthesizedExpr, UnaryOp},
+        parse::{FilterParser, ParseError, ParserSettings},
+        visitor::{Visitor, VisitorMut},
+    },
+    compiler::{Compiler, DefaultCompiler},
+    execution_context::{
+        ExecutionContext, ExecutionContextGuard, InvalidListMatcherError, SetFieldValueError,
+    },
+    filter::{
+        CompiledExpr, CompiledOneExpr, CompiledValueExpr, CompiledVecExpr, Filter, FilterValue,
+    },
+    functions::{
+        AllFunction, AnyFunction, ConcatFunction, FunctionArgInvalidConstantError, FunctionArgKind,
+        FunctionArgKindMismatchError, FunctionArgs, FunctionDefinition, FunctionDefinitionContext,
+        FunctionParam, FunctionParamError, LowerFunction, SimpleFunctionDefinition,
+        SimpleFunctionImpl, SimpleFunctionOptParam, SimpleFunctionParam,
+    },
+    lex::LexErrorKind,
+    lhs_types::{Array, Map, MapIter, TypedArray, TypedMap},
+    list_matcher::{
+        AlwaysList, AlwaysListMatcher, ListDefinition, ListMatcher, NeverList, NeverListMatcher,
+    },
+    panic::{
+        PanicCatcherFallbackMode, catch_panic, panic_catcher_disable, panic_catcher_enable,
+        panic_catcher_get_backtrace, panic_catcher_set_fallback_mode, panic_catcher_set_hook,
+    },
+    rhs_types::{
+        Bytes, BytesFormat, ExplicitIpRange, IntRange, IpCidr, IpRange, Regex, RegexError,
+        RegexFormat,
+    },
+    scheme::{
+        Field, FieldIndex, FieldRedefinitionError, FieldRef, Function, FunctionRedefinitionError,
+        FunctionRef, IdentifierRedefinitionError, IndexAccessError, List, ListRef, Scheme,
+        SchemeBuilder, SchemeMismatchError, UnknownFieldError,
+    },
+    types::{
+        CompoundType, ExpectedType, ExpectedTypeList, GetType, LhsValue, RhsValue, RhsValues, Type,
+        TypeMismatchError,
+    },
 };
