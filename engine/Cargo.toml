@@ -6,8 +6,7 @@ edition.workspace = true
 description = "An execution engine for Wireshark-like filters"
 readme = "README.md"
 repository = "https://github.com/cloudflare/wirefilter"
-license = "MIT"
-keywords = ["engine", "filter", "parser", "runtime", "wireshark"]
+keywords = ["wireshark", "filter", "engine", "parser", "runtime"]
 categories = ["config", "parser-implementations"]
 publish.workspace = true
 
@@ -28,6 +27,7 @@ erased-serde.workspace = true
 fnv.workspace = true
 memchr.workspace = true
 rand.workspace = true
+outer-regex.workspace = true
 regex-automata = { workspace = true, optional = true }
 serde.workspace = true
 simdutf8.workspace = true
@@ -39,6 +39,10 @@ wildcard.workspace = true
 criterion.workspace = true
 indoc.workspace = true
 serde_json.workspace = true
+
+[features]
+default = ["regex"]
+regex = ["dep:regex-automata"]
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 # By default, getrandom doesn't have any source of randomness on wasm32-unknown.

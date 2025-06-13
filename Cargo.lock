@@ -1283,6 +1283,7 @@ dependencies = [
  "indoc",
  "memchr",
  "rand",
+ "regex",
  "regex-automata",
  "serde",
  "serde_json",
