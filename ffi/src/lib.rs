@@ -18,7 +18,7 @@ use std::ops::{Deref, DerefMut};
 
 use wirefilter::{
     AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, LenFunction, LhsValue,
-    LowerFunction, NeverList, StartsWithFunction, Type, catch_panic,
+    LowerFunction, NeverList, StartsWithFunction, Type, WildcardReplaceFunction, catch_panic,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -368,8 +368,16 @@ pub extern "C" fn wirefilter_add_function_to_scheme(
                 }
             };
         }
+        "wildcard_replace" => {
+            return match builder.add_function(name, WildcardReplaceFunction::default()) {
+                Ok(_) => true,
+                Err(err) => {
+                    write_last_error!("{}", err);
+                    false
+                }
+            };
+        }
         _ => {
-            // Handle unknown function names
             write_last_error!("Unknown function name provided: {}", name);
             return false;
         }
