@@ -17,8 +17,7 @@ use std::net::IpAddr;
 use std::ops::{Deref, DerefMut};
 
 use wirefilter::{
-    AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, GetType, LenFunction,
-    LhsValue, LowerFunction, NeverList, StartsWithFunction, Type, WildcardReplaceFunction,
+    AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, GetType, LenFunction, LowerFunction, NeverList, StartsWithFunction, Type, WildcardReplaceFunction,
     catch_panic,
 };
 
