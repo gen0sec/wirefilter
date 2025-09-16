@@ -392,8 +392,6 @@ pub extern "C" fn wirefilter_add_function_to_scheme(
             return false;
         }
     };
-
-    // Call the original Rust method. This should now compile correctly.
 }
 
 #[unsafe(no_mangle)]

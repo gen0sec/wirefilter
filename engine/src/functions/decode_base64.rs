@@ -5,6 +5,20 @@ use base64::engine::general_purpose::STANDARD;
 
 use crate::{FunctionArgs, FunctionDefinition, LhsValue, Type};
 
+/// Decodes a Base64-encoded string specified in `source`.
+///
+/// The `source` must be a field (not a literal). The function decodes using
+/// the standard Base64 alphabet (RFC 4648) and returns the decoded bytes.
+///
+/// Example:
+///
+/// Given an HTTP header: `client_id: MTIzYWJj`
+///
+/// ```text
+/// any(decode_base64(http.request.headers["client_id"][*])[*] eq "123abc")
+/// ```
+///
+/// The above evaluates to true because `MTIzYWJj` decodes to `"123abc"`.
 #[derive(Default, Debug)]
 pub struct DecodeBase64Function {}
 
@@ -75,7 +89,6 @@ impl FunctionDefinition for DecodeBase64Function {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Type;
 
     fn owned_bytes(s: &str) -> LhsValue<'_> {
         LhsValue::Bytes(Cow::Owned(s.as_bytes().to_vec()))
