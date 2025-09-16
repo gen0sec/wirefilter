@@ -34,6 +34,7 @@ simdutf8.workspace = true
 sliceslice.workspace = true
 thiserror.workspace = true
 wildcard.workspace = true
+urlencoding.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
