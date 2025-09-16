@@ -28,6 +28,7 @@ use std::any::Any;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug};
 use std::iter::once;
+pub use substring::SubstringFunction;
 use thiserror::Error;
 pub use url_decode::UrlDecodeFunction;
 pub use wildcard_replace::WildcardReplaceFunction;
