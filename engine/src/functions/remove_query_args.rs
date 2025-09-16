@@ -41,17 +41,14 @@ fn remove_query_args_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>
             let src = source.as_ref();
             let mut out: Vec<u8> = Vec::with_capacity(src.len());
 
-            // split on '&' preserving empty segments if present
             let mut first = true;
             for seg in src.split(|b| *b == b'&') {
-                // determine key: bytes before '=' if present, otherwise whole segment
                 let key = match seg.iter().position(|b| *b == b'=') {
                     Some(pos) => &seg[..pos],
                     None => seg,
                 };
 
                 if to_remove.contains(key) {
-                    // skip this parameter entirely
                     continue;
                 }
 
@@ -100,7 +97,6 @@ impl FunctionDefinition for RemoveQueryArgsFunction {
     }
 
     fn arg_count(&self) -> (usize, Option<usize>) {
-        // at least 2 args: field + at least one parameter name
         (2, None)
     }
 
