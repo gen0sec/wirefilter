@@ -43,6 +43,7 @@ wasm-bindgen = { version = "0.2.108", features = ["serde-serialize"] }
 wildcard = "0.3.0"
 urlencoding = "2.1.3"
 wirefilter = { package = "wirefilter-engine", path = "engine" }
+base64 = "0.21"
 
 [profile.dev]
 panic = "unwind"
