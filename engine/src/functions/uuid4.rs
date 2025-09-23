@@ -22,7 +22,7 @@ fn uuid4_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
 
     match arg {
         Ok(LhsValue::Bytes(bytes)) => {
-            if bytes.len() < 16 {
+            if bytes.is_empty() {
                 return None;
             }
 
