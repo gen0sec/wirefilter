@@ -8,6 +8,7 @@ pub(crate) mod lower;
 pub(crate) mod remove_bytes;
 pub(crate) mod starts_with;
 pub(crate) mod url_decode;
+pub(crate) mod uuid4;
 pub(crate) mod wildcard_replace;
 
 use crate::{
@@ -31,6 +32,7 @@ use std::iter::once;
 pub use substring::SubstringFunction;
 use thiserror::Error;
 pub use url_decode::UrlDecodeFunction;
+pub use uuid4::UUID4Function;
 pub use wildcard_replace::WildcardReplaceFunction;
 
 pub(crate) struct ExactSizeChain<A, B>
