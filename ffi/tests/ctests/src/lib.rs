@@ -55,5 +55,6 @@ mod ffi_ctest {
         match_filter,
         match_map,
         match_array,
+        add_function,
     );
 }
