@@ -157,15 +157,21 @@ impl FunctionDefinition for CIDRFunction {
     ) -> Result<(), super::FunctionParamError> {
         match params.len() {
             0 => {
-                next_param.arg_kind().expect(super::FunctionArgKind::Field)?;
+                next_param
+                    .arg_kind()
+                    .expect(super::FunctionArgKind::Field)?;
                 next_param.expect_val_type(iter::once(Type::Ip.into()))?;
             }
             1 => {
-                next_param.arg_kind().expect(super::FunctionArgKind::Literal)?;
+                next_param
+                    .arg_kind()
+                    .expect(super::FunctionArgKind::Literal)?;
                 next_param.expect_val_type(iter::once(Type::Int.into()))?;
             }
             2 => {
-                next_param.arg_kind().expect(super::FunctionArgKind::Literal)?;
+                next_param
+                    .arg_kind()
+                    .expect(super::FunctionArgKind::Literal)?;
                 next_param.expect_val_type(iter::once(Type::Int.into()))?;
             }
             _ => unreachable!(),

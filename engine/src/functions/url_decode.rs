@@ -152,11 +152,15 @@ impl FunctionDefinition for UrlDecodeFunction {
     ) -> Result<(), super::FunctionParamError> {
         match params.len() {
             0 => {
-                next_param.arg_kind().expect(super::FunctionArgKind::Field)?;
+                next_param
+                    .arg_kind()
+                    .expect(super::FunctionArgKind::Field)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             1 => {
-                next_param.arg_kind().expect(super::FunctionArgKind::Literal)?;
+                next_param
+                    .arg_kind()
+                    .expect(super::FunctionArgKind::Literal)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             _ => unreachable!(),
