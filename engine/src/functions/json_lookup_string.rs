@@ -73,22 +73,15 @@ fn json_lookup_string_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a
         }
     };
 
-    if process_key(first_key).is_none() {
-        return None;
-    }
+    process_key(first_key)?;
 
     for arg in args {
-        if process_key(arg).is_none() {
-            return None;
-        }
+        process_key(arg)?;
     }
 
-    match current.as_str() {
-        Some(s) => Some(LhsValue::Bytes(std::borrow::Cow::Owned(
-            s.as_bytes().to_vec(),
-        ))),
-        None => None,
-    }
+    current
+        .as_str()
+        .map(|s| LhsValue::Bytes(std::borrow::Cow::Owned(s.as_bytes().to_vec())))
 }
 
 impl FunctionDefinition for JsonLookupStringFunction {

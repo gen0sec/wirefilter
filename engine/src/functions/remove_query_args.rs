@@ -21,7 +21,7 @@ fn remove_query_args_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>
     let first_param = args.next().expect("expected at least 2 args, got 1");
 
     let mut param_args = vec![first_param];
-    while let Some(arg) = args.next() {
+    for arg in args {
         param_args.push(arg);
     }
 

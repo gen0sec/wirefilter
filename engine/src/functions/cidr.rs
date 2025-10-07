@@ -140,9 +140,9 @@ fn cidr_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
         (Ok(LhsValue::Ip(IpAddr::V6(ipv6_addr))), _, Ok(LhsValue::Int(prefix_length))) => Some(
             LhsValue::Ip(IpAddr::V6(calc_ipv6_cidr_addr(ipv6_addr, prefix_length))),
         ),
-        (Err(Type::Ip), _, _) => return None,
-        (_, Err(Type::Int), _) => return None,
-        (_, _, Err(Type::Int)) => return None,
+        (Err(Type::Ip), _, _) => None,
+        (_, Err(Type::Int), _) => None,
+        (_, _, Err(Type::Int)) => None,
         _ => unreachable!(),
     }
 }

@@ -13,9 +13,9 @@ use crate::{FunctionArgs, FunctionDefinition, LhsValue, Type};
 ///
 /// Options (passed as a single literal string, e.g. "r" or "ur"):
 /// - `r`: Recursive decoding. For example `%2520` decoded with `r` becomes a space
-///        (`%2520` -> `%20` -> ` `).
+///   (`%2520` -> `%20` -> ` `).
 /// - `u`: Enable Unicode percent decoding using `%uXXXX` sequences. The output
-///        will be UTF-8 encoded.
+///   will be UTF-8 encoded.
 ///
 /// Examples:
 ///
@@ -47,28 +47,31 @@ fn decode_once(input: &[u8], unicode_u: bool) -> Vec<u8> {
                     && (input[i + 1] == b'u' || input[i + 1] == b'U')
                 {
                     let hex = &input[i + 2..i + 6];
-                    if let Ok(s) = std::str::from_utf8(hex) {
-                        if let Ok(code_point) = u32::from_str_radix(s, 16) {
-                            if let Some(ch) = std::char::from_u32(code_point) {
-                                let mut buf = [0u8; 4];
-                                let encoded = ch.encode_utf8(&mut buf).as_bytes();
-                                out.extend_from_slice(encoded);
-                                i += 6;
-                                continue;
-                            }
-                        }
+                    if let Some(encoded) = std::str::from_utf8(hex)
+                        .ok()
+                        .and_then(|s| u32::from_str_radix(s, 16).ok())
+                        .and_then(std::char::from_u32)
+                        .map(|ch| {
+                            let mut buf = [0u8; 4];
+                            ch.encode_utf8(&mut buf).as_bytes().to_vec()
+                        })
+                    {
+                        out.extend_from_slice(&encoded);
+                        i += 6;
+                        continue;
                     }
                     out.push(b'%');
                     i += 1;
                 } else if i + 2 < input.len() {
                     // parse %HH
                     let hex = &input[i + 1..i + 3];
-                    if let Ok(s) = std::str::from_utf8(hex) {
-                        if let Ok(byte) = u8::from_str_radix(s, 16) {
-                            out.push(byte);
-                            i += 3;
-                            continue;
-                        }
+                    if let Some(byte) = std::str::from_utf8(hex)
+                        .ok()
+                        .and_then(|s| u8::from_str_radix(s, 16).ok())
+                    {
+                        out.push(byte);
+                        i += 3;
+                        continue;
                     }
                     out.push(b'%');
                     i += 1;

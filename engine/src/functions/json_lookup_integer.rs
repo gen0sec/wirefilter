@@ -76,20 +76,13 @@ fn json_lookup_integer_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'
         }
     };
 
-    if process_key(first_key).is_none() {
-        return None;
-    }
+    process_key(first_key)?;
 
     for arg in args {
-        if process_key(arg).is_none() {
-            return None;
-        }
+        process_key(arg)?;
     }
 
-    match current.as_i64() {
-        Some(i) => Some(LhsValue::Int(i)),
-        None => None,
-    }
+    current.as_i64().map(LhsValue::Int)
 }
 
 impl FunctionDefinition for JsonLookupIntegerFunction {
