@@ -58,7 +58,7 @@ impl FunctionDefinition for ToStringFunction {
     ) -> Result<(), super::FunctionParamError> {
         match params.len() {
             0 => {
-                next_param.expect_arg_kind(FunctionArgKind::Field)?;
+                next_param.arg_kind().expect(FunctionArgKind::Field)?;
                 next_param.expect_val_type(
                     [Type::Int.into(), Type::Bool.into(), Type::Ip.into()].into_iter(),
                 )?;

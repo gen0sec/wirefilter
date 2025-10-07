@@ -155,19 +155,19 @@ impl FunctionDefinition for WildcardReplaceFunction {
     ) -> Result<(), super::FunctionParamError> {
         match params.len() {
             0 => {
-                next_param.expect_arg_kind(super::FunctionArgKind::Field)?;
+                next_param.arg_kind().expect(super::FunctionArgKind::Field)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             1 => {
-                next_param.expect_arg_kind(super::FunctionArgKind::Literal)?;
+                next_param.arg_kind().expect(super::FunctionArgKind::Literal)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             2 => {
-                next_param.expect_arg_kind(super::FunctionArgKind::Literal)?;
+                next_param.arg_kind().expect(super::FunctionArgKind::Literal)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             3 => {
-                next_param.expect_arg_kind(super::FunctionArgKind::Literal)?;
+                next_param.arg_kind().expect(super::FunctionArgKind::Literal)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             _ => unreachable!(),

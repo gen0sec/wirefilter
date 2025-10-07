@@ -40,12 +40,12 @@ impl FunctionDefinition for StartsWithFunction {
         match params.len() {
             0 => {
                 // first arg
-                next_param.expect_arg_kind(FunctionArgKind::Field)?;
+                next_param.arg_kind().expect(FunctionArgKind::Field)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             1 => {
                 // second arg
-                next_param.expect_arg_kind(FunctionArgKind::Literal)?;
+                next_param.arg_kind().expect(FunctionArgKind::Literal)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             _ => unreachable!(),

@@ -80,7 +80,7 @@ impl FunctionDefinition for UUID4Function {
     ) -> Result<(), super::FunctionParamError> {
         match params.len() {
             0 => {
-                next_param.expect_arg_kind(FunctionArgKind::Field)?;
+                next_param.arg_kind().expect(FunctionArgKind::Field)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             _ => unreachable!(),

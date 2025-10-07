@@ -152,11 +152,11 @@ impl FunctionDefinition for UrlDecodeFunction {
     ) -> Result<(), super::FunctionParamError> {
         match params.len() {
             0 => {
-                next_param.expect_arg_kind(super::FunctionArgKind::Field)?;
+                next_param.arg_kind().expect(super::FunctionArgKind::Field)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             1 => {
-                next_param.expect_arg_kind(super::FunctionArgKind::Literal)?;
+                next_param.arg_kind().expect(super::FunctionArgKind::Literal)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             _ => unreachable!(),
@@ -190,7 +190,6 @@ impl FunctionDefinition for UrlDecodeFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Type;
 
     fn owned_bytes(s: &str) -> LhsValue<'_> {
         LhsValue::Bytes(Cow::Owned(s.as_bytes().to_vec()))

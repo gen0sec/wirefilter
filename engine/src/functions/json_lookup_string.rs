@@ -100,12 +100,12 @@ impl FunctionDefinition for JsonLookupStringFunction {
         _: Option<&mut super::FunctionDefinitionContext>,
     ) -> Result<(), super::FunctionParamError> {
         match params.len() {
-            0 => {
-                next_param.expect_arg_kind(FunctionArgKind::Field)?;
-                next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
+                0 => {
+                    next_param.arg_kind().expect(FunctionArgKind::Field)?;
+                    next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             _ => {
-                next_param.expect_arg_kind(FunctionArgKind::Literal)?;
+                    next_param.arg_kind().expect(FunctionArgKind::Literal)?;
                 next_param
                     .expect_val_type(vec![Type::Bytes.into(), Type::Int.into()].into_iter())?;
             }

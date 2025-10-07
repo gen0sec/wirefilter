@@ -63,7 +63,7 @@ impl FunctionDefinition for LenFunction {
     ) -> Result<(), super::FunctionParamError> {
         match params.len() {
             0 => {
-                next_param.expect_arg_kind(super::FunctionArgKind::Field)?;
+                next_param.arg_kind().expect(super::FunctionArgKind::Field)?;
                 next_param.expect_val_type(
                     [ExpectedType::Type(Type::Bytes), ExpectedType::Array]
                         .iter()

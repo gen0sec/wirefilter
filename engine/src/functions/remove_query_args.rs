@@ -76,11 +76,11 @@ impl FunctionDefinition for RemoveQueryArgsFunction {
     ) -> Result<(), super::FunctionParamError> {
         match params.len() {
             0 => {
-                next_param.expect_arg_kind(FunctionArgKind::Field)?;
+                next_param.arg_kind().expect(FunctionArgKind::Field)?;
                 next_param.expect_val_type(std::iter::once(Type::Bytes.into()))?;
             }
             _ => {
-                next_param.expect_arg_kind(FunctionArgKind::Literal)?;
+                next_param.arg_kind().expect(FunctionArgKind::Literal)?;
                 next_param.expect_val_type(std::iter::once(Type::Bytes.into()))?;
             }
         }
