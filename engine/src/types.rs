@@ -567,6 +567,87 @@ impl<'a> IntoValue<'a> for u8 {
     }
 }
 
+impl<'a> IntoValue<'a> for &'a [u8] {
+    const TYPE: Type = Type::Bytes;
+
+    #[inline]
+    fn into_value(self) -> LhsValue<'a> {
+        LhsValue::Bytes(Bytes::from(self))
+    }
+}
+
+impl<'a> IntoValue<'a> for Box<[u8]> {
+    const TYPE: Type = Type::Bytes;
+
+    #[inline]
+    fn into_value(self) -> LhsValue<'a> {
+        LhsValue::Bytes(Bytes::from(self))
+    }
+}
+
+impl<'a> IntoValue<'a> for Vec<u8> {
+    const TYPE: Type = Type::Bytes;
+
+    #[inline]
+    fn into_value(self) -> LhsValue<'a> {
+        LhsValue::Bytes(Bytes::from(self))
+    }
+}
+
+impl<'a> IntoValue<'a> for Cow<'a, [u8]> {
+    const TYPE: Type = Type::Bytes;
+
+    #[inline]
+    fn into_value(self) -> LhsValue<'a> {
+        LhsValue::Bytes(Bytes::from(self))
+    }
+}
+
+impl<'a> IntoValue<'a> for &'a str {
+    const TYPE: Type = Type::Bytes;
+
+    #[inline]
+    fn into_value(self) -> LhsValue<'a> {
+        LhsValue::Bytes(Bytes::from(self))
+    }
+}
+
+impl<'a> IntoValue<'a> for Box<str> {
+    const TYPE: Type = Type::Bytes;
+
+    #[inline]
+    fn into_value(self) -> LhsValue<'a> {
+        LhsValue::Bytes(Bytes::from(self))
+    }
+}
+
+impl<'a> IntoValue<'a> for String {
+    const TYPE: Type = Type::Bytes;
+
+    #[inline]
+    fn into_value(self) -> LhsValue<'a> {
+        LhsValue::Bytes(Bytes::from(self))
+    }
+}
+
+impl<'a> IntoValue<'a> for Cow<'a, str> {
+    const TYPE: Type = Type::Bytes;
+
+    #[inline]
+    fn into_value(self) -> LhsValue<'a> {
+        LhsValue::Bytes(Bytes::from(self))
+    }
+}
+
+impl<'a> IntoValue<'a> for Bytes<'a> {
+    const TYPE: Type = Type::Bytes;
+
+    #[inline]
+    fn into_value(self) -> LhsValue<'a> {
+        LhsValue::Bytes(self)
+    }
+}
+
 impl<'a> IntoValue<'a> for IpAddr {
     const TYPE: Type = Type::Ip;
 

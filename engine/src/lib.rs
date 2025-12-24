@@ -104,7 +104,7 @@ pub use self::{
         StartsWithFunction, UrlDecodeFunction, WildcardReplaceFunction,
     },
     lex::LexErrorKind,
-    lhs_types::{Array, Map, MapIter, TypedArray, TypedMap},
+    lhs_types::{Array, Bytes, Map, MapIter, TypedArray, TypedMap},
     list_matcher::{
         AlwaysList, AlwaysListMatcher, ListDefinition, ListMatcher, NeverList, NeverListMatcher,
     },
