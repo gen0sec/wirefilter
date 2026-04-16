@@ -10,9 +10,11 @@ use std::iter;
 /// To obtain an array of random bytes, use the cf.random_seed field.
 /// For example, uuidv4(cf.random_seed) will return a UUIDv4 similar to 49887398-6bcf-485f-8899-f15dbef4d1d5.
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub struct UUID4Function {}
 
 #[inline]
+#[allow(dead_code)]
 fn uuid4_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     let arg = args.next().expect("expected 1 argument, got 0");
 

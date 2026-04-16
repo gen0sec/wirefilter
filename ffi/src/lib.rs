@@ -306,92 +306,76 @@ pub extern "C" fn wirefilter_add_function_to_scheme(
     let name = to_str!(name_ptr, name_len);
 
     match name {
-        "concat" => {
-            return match builder.add_function(name, ConcatFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "any" => {
-            return match builder.add_function(name, AnyFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "all" => {
-            return match builder.add_function(name, AllFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "lower" => {
-            return match builder.add_function(name, LowerFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "starts_with" => {
-            return match builder.add_function(name, StartsWithFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "cidr" => {
-            return match builder.add_function(name, CIDRFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "len" => {
-            return match builder.add_function(name, LenFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
+        "concat" => match builder.add_function(name, ConcatFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "any" => match builder.add_function(name, AnyFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "all" => match builder.add_function(name, AllFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "lower" => match builder.add_function(name, LowerFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "starts_with" => match builder.add_function(name, StartsWithFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "cidr" => match builder.add_function(name, CIDRFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "len" => match builder.add_function(name, LenFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
         "wildcard_replace" => {
-            return match builder.add_function(name, WildcardReplaceFunction::default()) {
+            match builder.add_function(name, WildcardReplaceFunction::default()) {
                 Ok(_) => true,
                 Err(err) => {
                     write_last_error!("{}", err);
                     false
                 }
-            };
+            }
         }
-        "url_decode" => {
-            return match builder.add_function(name, UrlDecodeFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
+        "url_decode" => match builder.add_function(name, UrlDecodeFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
         _ => {
             write_last_error!("Unknown function name provided: {}", name);
-            return false;
+            false
         }
-    };
+    }
 }
 
 #[unsafe(no_mangle)]

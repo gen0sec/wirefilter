@@ -19,9 +19,11 @@ use crate::{FunctionArgs, FunctionDefinition, LhsValue, Type};
 ///
 /// The above evaluates to true because `MTIzYWJj` decodes to `"123abc"`.
 #[derive(Default, Debug)]
+#[allow(dead_code)]
 pub struct DecodeBase64Function {}
 
 #[inline]
+#[allow(dead_code)]
 fn decode_base64_impl_inner(source: &[u8]) -> Bytes<'static> {
     match STANDARD.decode(source) {
         Ok(decoded) => Bytes::Owned(decoded.into_boxed_slice()),

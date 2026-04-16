@@ -32,9 +32,11 @@ use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
 /// substring(http.request.body.raw, -2)     -> "jk"
 /// substring(http.request.body.raw, 0, -2)  -> "asdfgh"
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub struct SubstringFunction {}
 
 #[inline]
+#[allow(dead_code)]
 fn substring_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     let source_arg = args.next().expect("expected at least 2 arguments, got 0");
     let start_arg = args.next().expect("expected at least 2 arguments, got 1");

@@ -7,9 +7,11 @@ use crate::{FunctionArgKind, FunctionArgs, FunctionDefinition, LhsValue, Type};
 /// will be removed from the source. For example, `remove_bytes(field, "abc")`
 /// removes all `a`, `b`, and `c` bytes from `field`.
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub struct RemoveBytesFunction {}
 
 #[inline]
+#[allow(dead_code)]
 fn remove_bytes_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     let source_arg = args.next().expect("expected 2 argument, got 0");
     let pattern_arg = args.next().expect("expected 2 arguments, got 1");
