@@ -10,8 +10,7 @@ use std::clone::Clone;
 use std::fmt::Debug;
 use std::net::IpAddr;
 use wirefilter::{
-    Bytes, Bytes, ExecutionContext, ExecutionContext, FilterAst, FilterAst, FunctionArgs,
-    FunctionArgs, GetType, GetType, LhsValue, LhsValue, SchemeBuilder, SchemeBuilder,
+    Bytes, ExecutionContext, FilterAst, FunctionArgs, GetType, LhsValue, SchemeBuilder,
     SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionParam, Type,
 };
 

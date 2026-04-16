@@ -2767,6 +2767,7 @@ mod tests {
         assert_eq!(true_count, 1);
     }
 
+    #[cfg(feature = "regex-automata")]
     #[test]
     fn test_raw_string() {
         // Equal operator

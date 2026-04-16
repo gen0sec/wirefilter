@@ -8,7 +8,7 @@ use std::hash::{Hash, Hasher};
 use thiserror::Error;
 
 cfg_if! {
-    if #[cfg(feature = "regex-automata")] {
+    if #[cfg(feature = "regex")] {
         mod imp_real;
         pub use self::imp_real::*;
     } else {
