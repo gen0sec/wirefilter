@@ -59,6 +59,7 @@ use std::iter;
 /// * If `replacement` is not valid UTF-8.
 /// * If the `wildcard_pattern` results in an invalid regular expression (e.g., `**`).
 ///
+
 #[derive(Debug, Default)]
 pub struct WildcardReplaceFunction {}
 
