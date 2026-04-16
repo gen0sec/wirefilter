@@ -804,12 +804,11 @@ mod tests {
     };
     use crate::lhs_types::{Array, Map};
     use crate::list_matcher::{ListDefinition, ListMatcher};
-    use crate::rhs_types::{IpRange, RegexFormat};
+    use crate::rhs_types::{BytesFormat, IpRange, RegexFormat};
     use crate::scheme::{FieldIndex, IndexAccessError, Scheme};
     use crate::types::ExpectedType;
     use crate::{
-        BytesFormat, FieldRef, LhsValue, ParserSettings, SchemeBuilder, SimpleFunctionArgKind,
-        TypedMap,
+        FieldRef, LhsValue, ParserSettings, SchemeBuilder, SimpleFunctionArgKind, TypedMap,
     };
     use cidr::IpCidr;
     use serde::Deserialize;
@@ -2767,7 +2766,7 @@ mod tests {
         assert_eq!(true_count, 1);
     }
 
-    #[cfg(feature = "regex-automata")]
+    #[cfg(feature = "regex")]
     #[test]
     fn test_raw_string() {
         // Equal operator
