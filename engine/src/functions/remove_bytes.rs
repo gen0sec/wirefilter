@@ -24,7 +24,9 @@ fn remove_bytes_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
             let pattern_bytes = pattern_list.as_ref();
 
             if pattern_bytes.is_empty() {
-                return Some(LhsValue::Bytes(Bytes::Owned(source_bytes.to_vec().into_boxed_slice())));
+                return Some(LhsValue::Bytes(Bytes::Owned(
+                    source_bytes.to_vec().into_boxed_slice(),
+                )));
             }
 
             let mut to_remove = [false; 256];

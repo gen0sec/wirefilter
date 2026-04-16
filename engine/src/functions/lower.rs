@@ -20,7 +20,9 @@ fn lower_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
         Ok(LhsValue::Bytes(bytes)) => {
             let bytes_lower: Vec<u8> = bytes.into_owned().to_vec();
             let bytes_lower = bytes_lower.to_ascii_lowercase();
-            Some(LhsValue::Bytes(Bytes::Owned(bytes_lower.into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                bytes_lower.into_boxed_slice(),
+            )))
         }
         Err(Type::Bytes) => None,
         _ => unreachable!(),
@@ -78,28 +80,37 @@ mod tests {
         let mut args_upper = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"HELLO WORLD")))].into_iter();
         assert_eq!(
             lower_impl(&mut args_upper),
-            Some(LhsValue::Bytes(Bytes::Owned(b"hello world".to_vec().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"hello world".to_vec().into_boxed_slice()
+            )))
         );
 
         // Test with a mixed-case string
         let mut args_mixed = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"MiXeD CaSe")))].into_iter();
         assert_eq!(
             lower_impl(&mut args_mixed),
-            Some(LhsValue::Bytes(Bytes::Owned(b"mixed case".to_vec().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"mixed case".to_vec().into_boxed_slice()
+            )))
         );
 
         // Test with an already lowercase string
-        let mut args_lower = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"already lower")))].into_iter();
+        let mut args_lower =
+            vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"already lower")))].into_iter();
         assert_eq!(
             lower_impl(&mut args_lower),
-            Some(LhsValue::Bytes(Bytes::Owned(b"already lower".to_vec().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"already lower".to_vec().into_boxed_slice()
+            )))
         );
 
         // Test with an empty string
         let mut args_empty = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"")))].into_iter();
         assert_eq!(
             lower_impl(&mut args_empty),
-            Some(LhsValue::Bytes(Bytes::Owned(b"".to_vec().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"".to_vec().into_boxed_slice()
+            )))
         );
 
         // Test with missing field

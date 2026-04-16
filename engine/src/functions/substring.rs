@@ -71,7 +71,9 @@ fn substring_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
 
             let start_us = start_idx as usize;
             let end_us = end_idx as usize;
-            Some(LhsValue::Bytes(Bytes::Owned(s[start_us..end_us].to_vec().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                s[start_us..end_us].to_vec().into_boxed_slice(),
+            )))
         }
         (Ok(LhsValue::Bytes(source)), Ok(LhsValue::Int(start)), None) => {
             let s = source.as_ref();
@@ -85,7 +87,9 @@ fn substring_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
             }
 
             let start_us = start_idx as usize;
-            Some(LhsValue::Bytes(Bytes::Owned(s[start_us..].to_vec().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                s[start_us..].to_vec().into_boxed_slice(),
+            )))
         }
         (Err(Type::Bytes), _, _) => None,
         (_, Err(Type::Int), _) => None,

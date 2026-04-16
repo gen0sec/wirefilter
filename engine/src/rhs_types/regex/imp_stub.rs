@@ -10,7 +10,11 @@ pub struct Regex {
 
 impl Regex {
     /// Creates a new dummy regex.
-    pub fn new(pattern: &str, format: RegexFormat, _: &ParserSettings) -> Result<Self, super::Error> {
+    pub fn new(
+        pattern: &str,
+        format: RegexFormat,
+        _: &ParserSettings,
+    ) -> Result<Self, super::Error> {
         Ok(Self {
             pattern: pattern.to_string(),
             format,

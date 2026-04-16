@@ -63,7 +63,9 @@ fn uuid4_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
                 uuid_bytes[15]
             );
 
-            Some(LhsValue::Bytes(Bytes::Owned(uuid_string.into_bytes().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                uuid_string.into_bytes().into_boxed_slice(),
+            )))
         }
         Err(Type::Bytes) => None,
         _ => unreachable!(),

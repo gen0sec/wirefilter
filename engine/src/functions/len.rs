@@ -101,8 +101,8 @@ impl FunctionDefinition for LenFunction {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Array, Type};
     use crate::lhs_types::Bytes;
+    use crate::{Array, Type};
 
     #[test]
     fn test_ln_fn() {

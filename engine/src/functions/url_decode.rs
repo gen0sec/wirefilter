@@ -139,10 +139,7 @@ fn url_decode_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
                 Some(Ok(LhsValue::Bytes(b))) => Some(b.as_ref().to_vec()),
                 _ => None,
             };
-            let decoded = url_decode(
-                source.as_ref(),
-                opts_bytes.as_ref().map(|v| v.as_slice()),
-            );
+            let decoded = url_decode(source.as_ref(), opts_bytes.as_deref());
             Some(LhsValue::Bytes(decoded))
         }
         (Err(Type::Bytes), _) => None,
