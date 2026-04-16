@@ -137,7 +137,7 @@ fn wildcard_replace_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>>
     }
 
     match (source_arg, wildcard_pattern_arg, replacement_arg, flags_arg) {
-        (_, _, _, Some(Err(Type::Bytes))) => None, // needs to be tested here so it does not go into unreachable
+        (_, _, _, Some(Err(Type::Bytes))) => None, /* needs to be tested here so it does not go into unreachable */
         (
             Ok(LhsValue::Bytes(source)),
             Ok(LhsValue::Bytes(wildcard_pattern)),

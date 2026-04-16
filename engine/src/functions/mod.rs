@@ -12,10 +12,10 @@ pub(crate) mod url_decode;
 pub(crate) mod uuid4;
 pub(crate) mod wildcard_replace;
 
-use crate::{
-    ParserSettings,
-    filter::CompiledValueResult,
-    types::{ExpectedType, ExpectedTypeList, GetType, LhsValue, RhsValue, Type, TypeMismatchError},
+use crate::ParserSettings;
+use crate::filter::CompiledValueResult;
+use crate::types::{
+    ExpectedType, ExpectedTypeList, GetType, LhsValue, RhsValue, Type, TypeMismatchError,
 };
 pub use all::AllFunction;
 pub use any::AnyFunction;
