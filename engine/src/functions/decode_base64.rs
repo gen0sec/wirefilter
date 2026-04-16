@@ -1,8 +1,7 @@
-use std::borrow::Cow;
-
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 
+use crate::lhs_types::Bytes;
 use crate::{FunctionArgs, FunctionDefinition, LhsValue, Type};
 
 /// Decodes a Base64-encoded string specified in `source`.
@@ -23,10 +22,10 @@ use crate::{FunctionArgs, FunctionDefinition, LhsValue, Type};
 pub struct DecodeBase64Function {}
 
 #[inline]
-fn decode_base64_impl_inner<'a>(source: Cow<'_, [u8]>) -> Cow<'a, [u8]> {
-    match STANDARD.decode(source.as_ref()) {
-        Ok(decoded) => Cow::Owned(decoded),
-        Err(_) => Cow::Owned(Vec::new()),
+fn decode_base64_impl_inner(source: &[u8]) -> Bytes<'static> {
+    match STANDARD.decode(source) {
+        Ok(decoded) => Bytes::Owned(decoded.into_boxed_slice()),
+        Err(_) => Bytes::Owned(Vec::new().into_boxed_slice()),
     }
 }
 
@@ -39,7 +38,10 @@ fn decode_base64_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     }
 
     match source {
-        Ok(LhsValue::Bytes(b)) => Some(LhsValue::Bytes(decode_base64_impl_inner(b))),
+        Ok(LhsValue::Bytes(b)) => {
+            let decoded = decode_base64_impl_inner(b.as_ref());
+            Some(LhsValue::Bytes(decoded))
+        }
         Err(Type::Bytes) => None,
         _ => unreachable!(),
     }
@@ -93,12 +95,12 @@ mod tests {
     use super::*;
 
     fn owned_bytes(s: &str) -> LhsValue<'_> {
-        LhsValue::Bytes(Cow::Owned(s.as_bytes().to_vec()))
+        LhsValue::Bytes(Bytes::Owned(s.as_bytes().to_vec().into_boxed_slice()))
     }
 
     #[test]
     fn test_decode_base64_basic() {
-        let mut args = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"MTIzYWJj")))].into_iter();
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"MTIzYWJj")))].into_iter();
         assert_eq!(decode_base64_impl(&mut args), Some(owned_bytes("123abc")));
     }
 
@@ -113,8 +115,8 @@ mod tests {
     #[should_panic(expected = "expected exactly 1 arg, got 2")]
     fn test_panic_more_args() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"MTIzYWJj"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"MTIzYWJj"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"MTIzYWJj"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"MTIzYWJj"))),
         ]
         .into_iter();
         decode_base64_impl(&mut args);

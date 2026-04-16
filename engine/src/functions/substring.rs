@@ -1,5 +1,4 @@
-use std::borrow::Cow;
-
+use crate::lhs_types::Bytes;
 use crate::{LhsValue, Type};
 
 use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
@@ -67,12 +66,12 @@ fn substring_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
             }
 
             if end_idx < start_idx {
-                return Some(LhsValue::Bytes(Cow::Owned(Vec::new())));
+                return Some(LhsValue::Bytes(Bytes::Owned(Vec::new().into_boxed_slice())));
             }
 
             let start_us = start_idx as usize;
             let end_us = end_idx as usize;
-            Some(LhsValue::Bytes(Cow::Owned(s[start_us..end_us].to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(s[start_us..end_us].to_vec().into_boxed_slice())))
         }
         (Ok(LhsValue::Bytes(source)), Ok(LhsValue::Int(start)), None) => {
             let s = source.as_ref();
@@ -86,7 +85,7 @@ fn substring_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
             }
 
             let start_us = start_idx as usize;
-            Some(LhsValue::Bytes(Cow::Owned(s[start_us..].to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(s[start_us..].to_vec().into_boxed_slice())))
         }
         (Err(Type::Bytes), _, _) => None,
         (_, Err(Type::Int), _) => None,
@@ -146,16 +145,15 @@ impl FunctionDefinition for SubstringFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::borrow::Cow;
 
     fn owned(s: &str) -> LhsValue<'_> {
-        LhsValue::Bytes(Cow::Owned(s.as_bytes().to_vec()))
+        LhsValue::Bytes(Bytes::Owned(s.as_bytes().to_vec().into_boxed_slice()))
     }
 
     #[test]
     fn test_substring_examples() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"asdfghjk"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"asdfghjk"))),
             Ok(LhsValue::Int(2)),
             Ok(LhsValue::Int(5)),
         ]
@@ -163,21 +161,21 @@ mod tests {
         assert_eq!(substring_impl(&mut args), Some(owned("dfg")));
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"asdfghjk"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"asdfghjk"))),
             Ok(LhsValue::Int(2)),
         ]
         .into_iter();
         assert_eq!(substring_impl(&mut args), Some(owned("dfghjk")));
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"asdfghjk"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"asdfghjk"))),
             Ok(LhsValue::Int(-2)),
         ]
         .into_iter();
         assert_eq!(substring_impl(&mut args), Some(owned("jk")));
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"asdfghjk"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"asdfghjk"))),
             Ok(LhsValue::Int(0)),
             Ok(LhsValue::Int(-2)),
         ]
@@ -188,14 +186,14 @@ mod tests {
     #[test]
     fn test_substring_out_of_bounds() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"abc"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"abc"))),
             Ok(LhsValue::Int(10)),
         ]
         .into_iter();
         assert_eq!(substring_impl(&mut args), Some(owned("")));
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"abc"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"abc"))),
             Ok(LhsValue::Int(-10)),
         ]
         .into_iter();

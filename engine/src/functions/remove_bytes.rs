@@ -1,8 +1,5 @@
-use std::borrow::Cow;
-
-use crate::{LhsValue, Type};
-
-use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
+use crate::lhs_types::Bytes;
+use crate::{FunctionArgKind, FunctionArgs, FunctionDefinition, LhsValue, Type};
 
 /// Removes all bytes that appear in the provided byte list from the source bytes.
 ///
@@ -27,7 +24,7 @@ fn remove_bytes_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
             let pattern_bytes = pattern_list.as_ref();
 
             if pattern_bytes.is_empty() {
-                return Some(LhsValue::Bytes(Cow::Owned(source_bytes.to_vec())));
+                return Some(LhsValue::Bytes(Bytes::Owned(source_bytes.to_vec().into_boxed_slice())));
             }
 
             let mut to_remove = [false; 256];
@@ -42,7 +39,7 @@ fn remove_bytes_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
                 }
             }
 
-            Some(LhsValue::Bytes(Cow::Owned(res)))
+            Some(LhsValue::Bytes(Bytes::Owned(res.into_boxed_slice())))
         }
         (Err(Type::Bytes), _) => None,
         (_, Err(Type::Bytes)) => None,
@@ -98,17 +95,16 @@ impl FunctionDefinition for RemoveBytesFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::borrow::Cow;
 
     fn owned_bytes(s: &str) -> LhsValue<'_> {
-        LhsValue::Bytes(Cow::Owned(s.as_bytes().to_vec()))
+        LhsValue::Bytes(Bytes::Owned(s.as_bytes().to_vec().into_boxed_slice()))
     }
 
     #[test]
     fn test_remove_bytes_basic() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"cloudflare.com"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"."))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"cloudflare.com"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"."))),
         ]
         .into_iter();
         assert_eq!(
@@ -120,8 +116,8 @@ mod tests {
     #[test]
     fn test_remove_bytes_multibyte_pattern() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"a--b--c"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"-"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"a--b--c"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"-"))),
         ]
         .into_iter();
         assert_eq!(remove_bytes_impl(&mut args), Some(owned_bytes("abc")));
@@ -130,8 +126,8 @@ mod tests {
     #[test]
     fn test_remove_multiple_bytes() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"ab1c2d3"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"123"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"ab1c2d3"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"123"))),
         ]
         .into_iter();
         assert_eq!(remove_bytes_impl(&mut args), Some(owned_bytes("abcd")));
@@ -140,8 +136,8 @@ mod tests {
     #[test]
     fn test_remove_bytes_no_match() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"hello"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"z"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"hello"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"z"))),
         ]
         .into_iter();
         assert_eq!(remove_bytes_impl(&mut args), Some(owned_bytes("hello")));
@@ -150,8 +146,8 @@ mod tests {
     #[test]
     fn test_remove_bytes_empty_pattern() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"abc"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b""))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"abc"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b""))),
         ]
         .into_iter();
         assert_eq!(remove_bytes_impl(&mut args), Some(owned_bytes("abc")));
@@ -167,11 +163,11 @@ mod tests {
     #[test]
     fn test_bad_args() {
         let mut first_arg_error =
-            vec![Err(Type::Bytes), Ok(LhsValue::Bytes(Cow::Borrowed(b"")))].into_iter();
+            vec![Err(Type::Bytes), Ok(LhsValue::Bytes(Bytes::Borrowed(b"")))].into_iter();
         assert_eq!(remove_bytes_impl(&mut first_arg_error), None);
 
         let mut second_arg_error =
-            vec![Ok(LhsValue::Bytes(Cow::Borrowed(b""))), Err(Type::Bytes)].into_iter();
+            vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b""))), Err(Type::Bytes)].into_iter();
         assert_eq!(remove_bytes_impl(&mut second_arg_error), None);
     }
 }

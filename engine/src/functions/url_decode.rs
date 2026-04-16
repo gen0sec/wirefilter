@@ -1,5 +1,6 @@
-use std::{borrow::Cow, iter};
+use std::iter;
 
+use crate::lhs_types::Bytes;
 use crate::{FunctionArgs, FunctionDefinition, LhsValue, Type};
 
 /// Decodes a URL-formatted string defined in source.
@@ -90,11 +91,11 @@ fn decode_once(input: &[u8], unicode_u: bool) -> Vec<u8> {
 }
 
 #[inline]
-fn url_decode<'a>(source: Cow<'_, [u8]>, options: Option<Cow<'_, [u8]>>) -> Cow<'a, [u8]> {
+fn url_decode(source: &[u8], options: Option<&[u8]>) -> Bytes<'static> {
     let mut recursive = false;
     let mut unicode_u = false;
     if let Some(opts) = options {
-        for &b in opts.as_ref() {
+        for &b in opts {
             match b {
                 b'r' => recursive = true,
                 b'u' => unicode_u = true,
@@ -103,7 +104,7 @@ fn url_decode<'a>(source: Cow<'_, [u8]>, options: Option<Cow<'_, [u8]>>) -> Cow<
         }
     }
 
-    let mut current = source.into_owned();
+    let mut current = source.to_vec();
 
     let mut next = decode_once(&current, unicode_u);
 
@@ -115,9 +116,9 @@ fn url_decode<'a>(source: Cow<'_, [u8]>, options: Option<Cow<'_, [u8]>>) -> Cow<
             current = next;
             next = decode_once(&current, unicode_u);
         }
-        Cow::Owned(current)
+        Bytes::Owned(current.into_boxed_slice())
     } else {
-        Cow::Owned(next)
+        Bytes::Owned(next.into_boxed_slice())
     }
 }
 
@@ -133,12 +134,16 @@ fn url_decode_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     match (source_arg, options_arg) {
         (_, Some(Err(Type::Bytes))) => None,
         (Ok(LhsValue::Bytes(source)), opt) => {
-            let options_extracted = match opt {
-                Some(Ok(LhsValue::Bytes(o))) => Some(o),
-                None => None,
-                _ => unreachable!(),
+            // Extract options bytes into an owned buffer to avoid lifetime issues
+            let opts_bytes: Option<Vec<u8>> = match opt {
+                Some(Ok(LhsValue::Bytes(b))) => Some(b.as_ref().to_vec()),
+                _ => None,
             };
-            Some(LhsValue::Bytes(url_decode(source, options_extracted)))
+            let decoded = url_decode(
+                source.as_ref(),
+                opts_bytes.as_ref().map(|v| v.as_slice()),
+            );
+            Some(LhsValue::Bytes(decoded))
         }
         (Err(Type::Bytes), _) => None,
         _ => unreachable!(),
@@ -197,26 +202,27 @@ impl FunctionDefinition for UrlDecodeFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lhs_types::Bytes;
 
     fn owned_bytes(s: &str) -> LhsValue<'_> {
-        LhsValue::Bytes(Cow::Owned(s.as_bytes().to_vec()))
+        LhsValue::Bytes(Bytes::Owned(s.as_bytes().to_vec().into_boxed_slice()))
     }
 
     #[test]
     fn test_url_decode_basic() {
-        let mut args = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"John%20Doe")))].into_iter();
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"John%20Doe")))].into_iter();
         assert_eq!(url_decode_impl(&mut args), Some(owned_bytes("John Doe")));
 
-        let mut args = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"John+Doe")))].into_iter();
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"John+Doe")))].into_iter();
         assert_eq!(url_decode_impl(&mut args), Some(owned_bytes("John Doe")));
 
-        let mut args = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"%2520")))].into_iter();
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"%2520")))].into_iter();
         // without recursive flag -> "%20"
         assert_eq!(url_decode_impl(&mut args), Some(owned_bytes("%20")));
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"%2520"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"r"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"%2520"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"r"))),
         ]
         .into_iter();
         assert_eq!(url_decode_impl(&mut args), Some(owned_bytes(" ")));
@@ -226,13 +232,13 @@ mod tests {
     fn test_url_decode_unicode_u() {
         // %u2601 -> U+2601 (cloud)
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"%u2601"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"u"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"%u2601"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"u"))),
         ]
         .into_iter();
         let res = url_decode_impl(&mut args).unwrap();
         if let LhsValue::Bytes(b) = res {
-            assert_eq!(b.into_owned(), "☁".as_bytes());
+            assert_eq!(b.into_owned(), "☁".as_bytes().to_vec().into_boxed_slice());
         } else {
             panic!("expected bytes")
         }

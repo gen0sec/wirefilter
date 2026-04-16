@@ -1,6 +1,6 @@
-use std::borrow::Cow;
 use std::collections::HashSet;
 
+use crate::lhs_types::Bytes;
 use crate::{LhsValue, Type};
 
 use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
@@ -59,7 +59,7 @@ fn remove_query_args_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>
                 out.extend_from_slice(seg);
             }
 
-            Some(LhsValue::Bytes(Cow::Owned(out)))
+            Some(LhsValue::Bytes(Bytes::Owned(out.into_boxed_slice())))
         }
         (Err(Type::Bytes), _) => None,
         _ => unreachable!(),
@@ -113,31 +113,30 @@ impl FunctionDefinition for RemoveQueryArgsFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::borrow::Cow;
 
     fn owned(s: &str) -> LhsValue<'_> {
-        LhsValue::Bytes(Cow::Owned(s.as_bytes().to_vec()))
+        LhsValue::Bytes(Bytes::Owned(s.as_bytes().to_vec().into_boxed_slice()))
     }
 
     #[test]
     fn test_remove_query_args_basic() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"order=asc&country=GB"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"country"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"order=asc&country=GB"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"country"))),
         ]
         .into_iter();
         assert_eq!(remove_query_args_impl(&mut args), Some(owned("order=asc")));
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"order=asc&country=GB"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"order"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"order=asc&country=GB"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"order"))),
         ]
         .into_iter();
         assert_eq!(remove_query_args_impl(&mut args), Some(owned("country=GB")));
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"order=asc&country=GB"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"search"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"order=asc&country=GB"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"search"))),
         ]
         .into_iter();
         assert_eq!(
@@ -149,10 +148,10 @@ mod tests {
     #[test]
     fn test_remove_query_args_repeated() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(
+            Ok(LhsValue::Bytes(Bytes::Borrowed(
                 b"category=Foo&order=desc&category=Bar",
             ))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"order"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"order"))),
         ]
         .into_iter();
         assert_eq!(
@@ -161,10 +160,10 @@ mod tests {
         );
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(
+            Ok(LhsValue::Bytes(Bytes::Borrowed(
                 b"category=Foo&order=desc&category=Bar",
             ))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"category"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"category"))),
         ]
         .into_iter();
         assert_eq!(remove_query_args_impl(&mut args), Some(owned("order=desc")));
@@ -173,9 +172,9 @@ mod tests {
     #[test]
     fn test_remove_query_args_multiple_params() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"a=1&b=2&c=3&d=4"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"b"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"d"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"a=1&b=2&c=3&d=4"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"b"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"d"))),
         ]
         .into_iter();
         assert_eq!(remove_query_args_impl(&mut args), Some(owned("a=1&c=3")));
@@ -184,8 +183,8 @@ mod tests {
     #[test]
     fn test_remove_query_args_no_match() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"x=1&y=2"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"z"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"x=1&y=2"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"z"))),
         ]
         .into_iter();
         assert_eq!(remove_query_args_impl(&mut args), Some(owned("x=1&y=2")));
@@ -194,8 +193,8 @@ mod tests {
     #[test]
     fn test_remove_query_args_empty_result() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"only=one"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"only"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"only=one"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"only"))),
         ]
         .into_iter();
         assert_eq!(remove_query_args_impl(&mut args), Some(owned("")));
@@ -211,7 +210,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "expected at least 2 args, got 1")]
     fn test_panic_one_arg() {
-        let mut args = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"a=1&b=2")))].into_iter();
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"a=1&b=2")))].into_iter();
         remove_query_args_impl(&mut args);
     }
 }

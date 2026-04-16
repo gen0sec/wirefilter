@@ -79,24 +79,20 @@ impl FunctionDefinition for StartsWithFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::borrow::Cow;
-
-    // fn create_bytes_lhs_val(s: &str) -> LhsValue<'_> {
-    //     LhsValue::Bytes(Cow::Owned(s.as_bytes().to_vec()))
-    // }
+    use crate::lhs_types::Bytes;
 
     #[test]
     fn test_starts_with_fn() {
         let mut true_args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"example_value"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"exampl"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"exampl"))),
         ]
         .into_iter();
         assert_eq!(starts_with_impl(&mut true_args), Some(LhsValue::Bool(true)));
 
         let mut false_args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"example_value"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"empl"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"empl"))),
         ]
         .into_iter();
         assert_eq!(
@@ -105,8 +101,8 @@ mod tests {
         );
 
         let mut empty_source_args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b""))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"exampl"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b""))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"exampl"))),
         ]
         .into_iter();
         assert_eq!(
@@ -115,8 +111,8 @@ mod tests {
         );
 
         let mut empty_substring_args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"example_value"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b""))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b""))),
         ]
         .into_iter();
         assert_eq!(
@@ -142,11 +138,11 @@ mod tests {
     #[test]
     fn test_bad_args() {
         let mut first_arg_error =
-            vec![Err(Type::Bytes), Ok(LhsValue::Bytes(Cow::Borrowed(b"")))].into_iter();
+            vec![Err(Type::Bytes), Ok(LhsValue::Bytes(Bytes::Borrowed(b"")))].into_iter();
         assert_eq!(starts_with_impl(&mut first_arg_error), None);
 
         let mut second_arg_error =
-            vec![Ok(LhsValue::Bytes(Cow::Borrowed(b""))), Err(Type::Bytes)].into_iter();
+            vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b""))), Err(Type::Bytes)].into_iter();
         assert_eq!(starts_with_impl(&mut second_arg_error), None);
 
         let mut both_arg_error = vec![Err(Type::Bytes), Err(Type::Bytes)].into_iter();

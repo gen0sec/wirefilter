@@ -1,5 +1,6 @@
 use std::iter;
 
+use crate::lhs_types::Bytes;
 use crate::{LhsValue, Type};
 
 use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
@@ -133,14 +134,13 @@ impl FunctionDefinition for JsonLookupIntegerFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::borrow::Cow;
 
     #[test]
     fn test_lookup_json_integer_basic() {
         let json = r#"{ "record_id": "aed53a", "version": 2 }"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"version"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"version"))),
         ]
         .into_iter();
         assert_eq!(json_lookup_integer_impl(&mut args), Some(LhsValue::Int(2)));
@@ -150,8 +150,8 @@ mod tests {
     fn test_lookup_json_integer_basic_negative() {
         let json = r#"{ "record_id": "aed53a", "version": -2 }"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"version"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"version"))),
         ]
         .into_iter();
         assert_eq!(json_lookup_integer_impl(&mut args), Some(LhsValue::Int(-2)));
@@ -161,9 +161,9 @@ mod tests {
     fn test_lookup_json_integer_nested() {
         let json = r#"{ "product": { "id": 356 } }"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"product"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"id"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"product"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"id"))),
         ]
         .into_iter();
         assert_eq!(
@@ -176,7 +176,7 @@ mod tests {
     fn test_lookup_json_integer_array_root() {
         let json = r#"["first_item", -234]"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
             Ok(LhsValue::Int(1)),
         ]
         .into_iter();
@@ -190,8 +190,8 @@ mod tests {
     fn test_lookup_json_integer_array_in_object() {
         let json = r#"{ "network_ids": [123, 456] }"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"network_ids"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"network_ids"))),
             Ok(LhsValue::Int(0)),
         ]
         .into_iter();
@@ -205,9 +205,9 @@ mod tests {
     fn test_lookup_json_integer_array_of_objects() {
         let json = r#"[{ "product_id": 123 }, { "product_id": 456 }]"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
             Ok(LhsValue::Int(1)),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"product_id"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"product_id"))),
         ]
         .into_iter();
         assert_eq!(
@@ -220,8 +220,8 @@ mod tests {
     fn test_lookup_json_integer_non_integer_float() {
         let json = r#"{ "value": 42.0 }"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"value"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"value"))),
         ]
         .into_iter();
         assert_eq!(json_lookup_integer_impl(&mut args), None);
@@ -231,8 +231,8 @@ mod tests {
     fn test_lookup_json_integer_invalid_json() {
         let json = b"not a json";
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"k"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"k"))),
         ]
         .into_iter();
         assert_eq!(json_lookup_integer_impl(&mut args), None);

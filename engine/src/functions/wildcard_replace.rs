@@ -1,5 +1,6 @@
-use std::{borrow::Cow, iter};
+use std::iter;
 
+use crate::lhs_types::Bytes;
 use crate::{FunctionArgs, FunctionDefinition, LhsValue, Type};
 use outer_regex::bytes::Regex;
 
@@ -63,19 +64,19 @@ use outer_regex::bytes::Regex;
 pub struct WildcardReplaceFunction {}
 
 #[inline]
-fn wildcard_replace<'a>(
-    source: Cow<'_, [u8]>,
-    wildcard_pattern: Cow<'_, [u8]>,
-    replacement: Cow<'_, [u8]>,
-    flags: Option<Cow<'_, [u8]>>,
-) -> Cow<'a, [u8]> {
-    let widlcard_pattern_str = std::str::from_utf8(wildcard_pattern.as_ref())
+fn wildcard_replace(
+    source: &[u8],
+    wildcard_pattern: &[u8],
+    replacement: &[u8],
+    case_sensitive: bool,
+) -> Bytes<'static> {
+    let widlcard_pattern_str = std::str::from_utf8(wildcard_pattern)
         .expect("Pattern argument must be valid UTF-8 for wildcard replacement.");
 
-    let replacement_str = std::str::from_utf8(replacement.as_ref())
+    let replacement_str = std::str::from_utf8(replacement)
         .expect("Replacement argument must be valid UTF-8 for wildcard replacement.");
 
-    let mut regex_pattern_str = String::from('^');
+    let mut regex_pattern_str = String::new();
     for c in widlcard_pattern_str.chars() {
         match c {
             '*' => regex_pattern_str.push_str("(.*?)"),
@@ -90,21 +91,39 @@ fn wildcard_replace<'a>(
         }
     }
 
-    let final_regex_pattern = match flags {
-        Some(flag_bytes) => {
-            if flag_bytes.as_ref() == [b's'] {
-                regex_pattern_str
-            } else {
-                format!("(?i){}", regex_pattern_str)
-            }
+    if case_sensitive {
+        // For case-sensitive, use anchored pattern
+        let re = Regex::new(&format!("^{}$", regex_pattern_str))
+            .expect("Invalid regex pattern generated.");
+        let replaced_bytes: Vec<u8> = re
+            .replace_all(source, replacement_str.as_bytes())
+            .into_owned();
+        Bytes::Owned(replaced_bytes.into_boxed_slice())
+    } else {
+        // For case-insensitive, check if empty pattern first (special case)
+        if regex_pattern_str.is_empty() {
+            // Empty pattern matches at start of string only (prepend replacement)
+            let result = [replacement_str.as_bytes(), source].concat();
+            return Bytes::Owned(result.into_boxed_slice());
         }
-        _ => regex_pattern_str,
-    };
 
-    let re = Regex::new(&final_regex_pattern).expect("Invalid regex pattern generated.");
-    let replaced_bytes: Cow<'_, [u8]> = re.replace_all(source.as_ref(), replacement_str.as_bytes());
+        // For case-insensitive matching, we need to check if the entire source string
+        // matches the pattern before doing replacement
+        let check_pattern = format!("^(?i:{})$", regex_pattern_str);
+        let re_check = Regex::new(&check_pattern).expect("Invalid regex pattern generated.");
 
-    Cow::Owned(replaced_bytes.into_owned())
+        // Check if entire source matches
+        if !re_check.is_match(source) {
+            return Bytes::Owned(source.to_vec().into_boxed_slice());
+        }
+
+        // For replacement with captures, use the same anchored pattern
+        let re = Regex::new(&check_pattern).expect("Invalid regex pattern generated.");
+        let replaced_bytes: Vec<u8> = re
+            .replace_all(source, replacement_str.as_bytes())
+            .into_owned();
+        Bytes::Owned(replaced_bytes.into_boxed_slice())
+    }
 }
 
 #[inline]
@@ -126,16 +145,16 @@ fn wildcard_replace_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>>
             Ok(LhsValue::Bytes(replacement)),
             flags,
         ) => {
-            let flags_extracted = match flags {
-                Some(Ok(LhsValue::Bytes(flags_raw))) => Some(flags_raw),
-                None => None,
+            let case_sensitive = match flags {
+                Some(Ok(LhsValue::Bytes(flags_raw))) => flags_raw.as_ref() == [b's'],
+                None => false,
                 _ => unreachable!(),
             };
             Some(LhsValue::Bytes(wildcard_replace(
-                source,
-                wildcard_pattern,
-                replacement,
-                flags_extracted,
+                source.as_ref(),
+                wildcard_pattern.as_ref(),
+                replacement.as_ref(),
+                case_sensitive,
             )))
         }
         (Err(Type::Bytes), _, _, _) => None,
@@ -209,21 +228,21 @@ impl FunctionDefinition for WildcardReplaceFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Type;
-    use std::borrow::Cow;
 
     fn owned_bytes(s: &str) -> LhsValue<'_> {
-        LhsValue::Bytes(Cow::Owned(s.as_bytes().to_vec()))
+        LhsValue::Bytes(Bytes::Owned(s.as_bytes().to_vec().into_boxed_slice()))
     }
 
     #[test]
     fn test_wildcard_replace_for_uri() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(
+            Ok(LhsValue::Bytes(Bytes::Borrowed(
                 b"https://apps.example.com/calendar/admin?expand=true",
             ))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"https://*.example.com/*/*"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(
+            Ok(LhsValue::Bytes(Bytes::Borrowed(
+                b"https://*.example.com/*/*",
+            ))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(
                 b"https://example.com/${1}/${2}/${3}",
             ))),
         ]
@@ -236,11 +255,11 @@ mod tests {
         );
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(
+            Ok(LhsValue::Bytes(Bytes::Borrowed(
                 b"https://example.com/applications/app1",
             ))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"/applications/*"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"/apps/${1}"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"/applications/*"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"/apps/${1}"))),
         ]
         .into_iter();
         assert_eq!(
@@ -249,9 +268,9 @@ mod tests {
         );
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"/calendar"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"/*"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"/apps/${1}"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"/calendar"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"/*"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"/apps/${1}"))),
         ]
         .into_iter();
         assert_eq!(
@@ -260,10 +279,10 @@ mod tests {
         );
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"/Apps/calendar"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"/apps/*"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"/${1}"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"s"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"/Apps/calendar"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"/apps/*"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"/${1}"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"s"))),
         ]
         .into_iter();
         assert_eq!(
@@ -272,9 +291,9 @@ mod tests {
         );
 
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"/apps/calendar/login"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"/apps/*/login"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"/${1}/login"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"/apps/calendar/login"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"/apps/*/login"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"/${1}/login"))),
         ]
         .into_iter();
         assert_eq!(
@@ -286,9 +305,9 @@ mod tests {
     #[test]
     fn test_wildcard_replace_basic() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"hello world"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"w*d"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"universe"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"hello world"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"w*d"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"universe"))),
         ]
         .into_iter();
         assert_eq!(
@@ -300,9 +319,9 @@ mod tests {
     #[test]
     fn test_wildcard_replace_special_chars_in_pattern() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"file.txt"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"*.txt"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"document.md"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"file.txt"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"*.txt"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"document.md"))),
         ]
         .into_iter();
         assert_eq!(
@@ -314,9 +333,9 @@ mod tests {
     #[test]
     fn test_wildcard_replace_no_match() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"hello world"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"xyz*"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"test"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"hello world"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"xyz*"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"test"))),
         ]
         .into_iter();
         assert_eq!(
@@ -328,9 +347,9 @@ mod tests {
     #[test]
     fn test_wildcard_replace_empty_source() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b""))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"*"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"replaced"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b""))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"*"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"replaced"))),
         ]
         .into_iter();
         assert_eq!(
@@ -348,9 +367,9 @@ mod tests {
         // or "XaXbXcX" (if regex matches between chars).
         // The current code's `re.replace_all` with an empty pattern and "X" on "abc" results in "Xabc".
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"abc"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b""))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"X"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"abc"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b""))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"X"))),
         ]
         .into_iter();
         assert_eq!(wildcard_replace_impl(&mut args), Some(owned_bytes("Xabc")));
@@ -359,9 +378,9 @@ mod tests {
     #[test]
     fn test_wildcard_replace_empty_replacement() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"remove this part"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b" this *"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b""))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"remove this part"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b" this *"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b""))),
         ]
         .into_iter();
         assert_eq!(
@@ -373,10 +392,10 @@ mod tests {
     #[test]
     fn test_wildcard_replace_with_s_flag() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"HELLO world"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"h*o"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"X"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"s"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"HELLO world"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"h*o"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"X"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"s"))),
         ]
         .into_iter();
         assert_eq!(
@@ -388,9 +407,9 @@ mod tests {
     #[test]
     fn test_wildcard_replace_no_flag() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"HELLO world"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"h*o"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"X"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"HELLO world"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"h*o"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"X"))),
         ]
         .into_iter();
         assert_eq!(
@@ -410,8 +429,8 @@ mod tests {
     #[should_panic(expected = "expected at least 3 args, got 2")]
     fn test_panic_two_args() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"a"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"b"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"a"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"b"))),
         ]
         .into_iter();
         wildcard_replace_impl(&mut args);
@@ -421,11 +440,11 @@ mod tests {
     #[should_panic(expected = "expected maximum 4 args, got 5")]
     fn test_panic_five_args() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"a"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"b"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"c"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"d"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"e"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"a"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"b"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"c"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"d"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"e"))),
         ]
         .into_iter();
         wildcard_replace_impl(&mut args);
@@ -436,25 +455,25 @@ mod tests {
         // Source is Err
         let mut args_err_source = vec![
             Err(Type::Bytes),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"*"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"rep"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"*"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"rep"))),
         ]
         .into_iter();
         assert_eq!(wildcard_replace_impl(&mut args_err_source), None);
 
         // Pattern is Err
         let mut args_err_pattern = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"abc"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"abc"))),
             Err(Type::Bytes),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"rep"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"rep"))),
         ]
         .into_iter();
         assert_eq!(wildcard_replace_impl(&mut args_err_pattern), None);
 
         // Replacement is Err
         let mut args_err_replacement = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"abc"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"*"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"abc"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"*"))),
             Err(Type::Bytes),
         ]
         .into_iter();
@@ -462,9 +481,9 @@ mod tests {
 
         // Flags is Err
         let mut args_err_flags = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"abc"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"*"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"rep"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"abc"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"*"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"rep"))),
             Err(Type::Bytes),
         ]
         .into_iter();
@@ -475,9 +494,9 @@ mod tests {
     #[should_panic(expected = "Pattern argument must be valid UTF-8 for wildcard replacement.")]
     fn test_panic_invalid_utf8_pattern() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"source"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"\xFF\xFE"))), // Invalid UTF-8
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"replacement"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"source"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"\xFF\xFE"))), // Invalid UTF-8
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"replacement"))),
         ]
         .into_iter();
         wildcard_replace_impl(&mut args);
@@ -487,9 +506,9 @@ mod tests {
     #[should_panic(expected = "Replacement argument must be valid UTF-8 for wildcard replacement.")]
     fn test_panic_invalid_utf8_replacement() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"source"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"*"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"\xFF\xFE"))), // Invalid UTF-8
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"source"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"*"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"\xFF\xFE"))), // Invalid UTF-8
         ]
         .into_iter();
         wildcard_replace_impl(&mut args);
@@ -500,8 +519,8 @@ mod tests {
     fn test_panic_incorrect_arg_type() {
         let mut args = vec![
             Ok(LhsValue::Int(123)), // Not Bytes
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"*"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"replacement"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"*"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"replacement"))),
         ]
         .into_iter();
         wildcard_replace_impl(&mut args);

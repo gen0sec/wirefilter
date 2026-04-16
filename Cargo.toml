@@ -12,6 +12,7 @@ members = [
 [workspace.package]
 version = "0.7.0"
 edition = "2024"
+authors = ["Cloudflare <oss@cloudflare.com>"]
 publish = true
 
 [workspace.dependencies]

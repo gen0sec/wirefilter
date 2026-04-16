@@ -7,12 +7,6 @@ pub use self::bytes::Bytes;
 pub use self::map::{Map, MapIter, MapValuesIntoIter, TypedMap};
 use crate::types::LhsValue;
 
-pub use self::{
-    array::{Array, ArrayIterator, TypedArray},
-    bytes::Bytes,
-    map::{Map, MapIter, MapValuesIntoIter, TypedMap},
-};
-
 pub struct AsRefIterator<'a, T: Iterator<Item = &'a LhsValue<'a>>>(T);
 
 impl<'a, T: Iterator<Item = &'a LhsValue<'a>>> AsRefIterator<'a, T> {

@@ -7,6 +7,7 @@ use crate::scheme::{FieldIndex, IndexAccessError};
 use crate::strict_partial_ord::StrictPartialOrd;
 use serde::de::{DeserializeSeed, Deserializer};
 use serde::{Deserialize, Serialize, Serializer};
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::convert::TryFrom;
@@ -672,18 +673,6 @@ impl<'a> IntoValue<'a> for Ipv6Addr {
     #[inline]
     fn into_value(self) -> LhsValue<'a> {
         LhsValue::Ip(IpAddr::V6(self))
-    }
-}
-
-impl<'a, T> IntoValue<'a> for T
-where
-    Bytes<'a>: From<T>,
-{
-    const TYPE: Type = Type::Bytes;
-
-    #[inline]
-    fn into_value(self) -> LhsValue<'a> {
-        LhsValue::Bytes(Bytes::from(self))
     }
 }
 

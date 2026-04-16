@@ -7,6 +7,7 @@ pub(crate) mod len;
 pub(crate) mod lower;
 pub(crate) mod remove_bytes;
 pub(crate) mod starts_with;
+pub(crate) mod substring;
 pub(crate) mod url_decode;
 pub(crate) mod uuid4;
 pub(crate) mod wildcard_replace;

@@ -100,8 +100,8 @@ pub use self::{
         AllFunction, AnyFunction, CIDRFunction, ConcatFunction, FunctionArgInvalidConstantError,
         FunctionArgKind, FunctionArgKindMismatchError, FunctionArgs, FunctionDefinition,
         FunctionDefinitionContext, FunctionParam, FunctionParamError, LenFunction, LowerFunction,
-        SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionOptParam, SimpleFunctionParam,
-        StartsWithFunction, UrlDecodeFunction, WildcardReplaceFunction,
+        SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionOptParam,
+        SimpleFunctionParam, StartsWithFunction, UrlDecodeFunction, WildcardReplaceFunction,
     },
     lex::LexErrorKind,
     lhs_types::{Array, Bytes, Map, MapIter, TypedArray, TypedMap},
@@ -113,7 +113,7 @@ pub use self::{
         panic_catcher_get_backtrace, panic_catcher_set_fallback_mode, panic_catcher_set_hook,
     },
     rhs_types::{
-        Bytes, BytesFormat, ExplicitIpRange, IntRange, IpCidr, IpRange, Regex, RegexError,
+        BytesFormat, ExplicitIpRange, IntRange, IpCidr, IpRange, Regex, RegexError,
         RegexFormat,
     },
     scheme::{

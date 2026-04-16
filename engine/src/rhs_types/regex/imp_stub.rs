@@ -1,9 +1,4 @@
-use crate::{FilterParser, RegexFormat};
-use thiserror::Error;
-
-/// Dummy regex error.
-#[derive(Debug, PartialEq, Error)]
-pub enum Error {}
+use crate::{ParserSettings, RegexFormat};
 
 /// Dummy regex wrapper that can only store a pattern
 /// but not actually be used for matching.
@@ -15,7 +10,7 @@ pub struct Regex {
 
 impl Regex {
     /// Creates a new dummy regex.
-    pub fn new(pattern: &str, format: RegexFormat, _: &FilterParser<'_>) -> Result<Self, Error> {
+    pub fn new(pattern: &str, format: RegexFormat, _: &ParserSettings) -> Result<Self, super::Error> {
         Ok(Self {
             pattern: pattern.to_string(),
             format,
