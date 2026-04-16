@@ -1,7 +1,6 @@
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::iter;
-
 use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
 use crate::lhs_types::Bytes;
 use crate::{LhsValue, Type};
