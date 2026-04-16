@@ -15,7 +15,6 @@ use std::hash::Hasher;
 use std::io::{self, Write};
 use std::net::IpAddr;
 use std::ops::{Deref, DerefMut};
-
 use wirefilter::{
     AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, DecodeBase64Function,
     GetType, LenFunction, LowerFunction, NeverList, RemoveBytesFunction, StartsWithFunction,
