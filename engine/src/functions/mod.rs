@@ -27,7 +27,6 @@ pub use lower::LowerFunction;
 pub use remove_bytes::RemoveBytesFunction;
 pub use starts_with::StartsWithFunction;
 use std::any::Any;
-use std::convert::TryFrom;
 use std::fmt::{self, Debug};
 use std::iter::once;
 pub use substring::SubstringFunction;

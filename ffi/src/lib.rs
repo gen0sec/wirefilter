@@ -17,8 +17,9 @@ use std::net::IpAddr;
 use std::ops::{Deref, DerefMut};
 
 use wirefilter::{
-    AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, GetType, LenFunction,
-    LowerFunction, NeverList, StartsWithFunction, Type, UrlDecodeFunction, WildcardReplaceFunction,
+    AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, DecodeBase64Function,
+    GetType, LenFunction, LowerFunction, NeverList, RemoveBytesFunction, StartsWithFunction,
+    SubstringFunction, Type, UUID4Function, UrlDecodeFunction, WildcardReplaceFunction,
     catch_panic,
 };
 
@@ -365,6 +366,34 @@ pub extern "C" fn wirefilter_add_function_to_scheme(
             }
         }
         "url_decode" => match builder.add_function(name, UrlDecodeFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "decode_base64" => match builder.add_function(name, DecodeBase64Function::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "remove_bytes" => match builder.add_function(name, RemoveBytesFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "substring" => match builder.add_function(name, SubstringFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "uuid4" => match builder.add_function(name, UUID4Function::default()) {
             Ok(_) => true,
             Err(err) => {
                 write_last_error!("{}", err);
