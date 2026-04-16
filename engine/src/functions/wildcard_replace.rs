@@ -1,8 +1,7 @@
-use std::iter;
-
 use crate::lhs_types::Bytes;
 use crate::{FunctionArgs, FunctionDefinition, LhsValue, Type};
 use outer_regex::bytes::Regex;
+use std::iter;
 
 /// Mimics Cloudflare's `wildcard_replace` function for byte slice inputs and output.
 ///

@@ -1,7 +1,6 @@
+use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
 use crate::lhs_types::Bytes;
 use crate::{LhsValue, Type};
-
-use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
 
 /// Returns a substring (slice by byte index) of a String/Bytes field.
 ///

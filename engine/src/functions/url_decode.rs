@@ -1,7 +1,6 @@
-use std::iter;
-
 use crate::lhs_types::Bytes;
 use crate::{FunctionArgs, FunctionDefinition, LhsValue, Type};
+use std::iter;
 
 /// Decodes a URL-formatted string defined in source.
 ///

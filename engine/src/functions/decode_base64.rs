@@ -1,8 +1,7 @@
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
-
 use crate::lhs_types::Bytes;
 use crate::{FunctionArgs, FunctionDefinition, LhsValue, Type};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 
 /// Decodes a Base64-encoded string specified in `source`.
 ///

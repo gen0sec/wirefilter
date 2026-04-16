@@ -1,8 +1,6 @@
-use std::iter;
-
-use crate::{LhsValue, Type};
-
 use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
+use crate::{LhsValue, Type};
+use std::iter;
 
 /// Returns `true` when the source starts with a given substring. Returns `false` otherwise. The source cannot be a literal value (like `"foo"`).
 /// For example, if `http.request.uri.path` is `"/blog/first-post"`, then `starts_with(http.request.uri.path, "/blog")` will return `true`.

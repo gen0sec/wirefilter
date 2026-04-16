@@ -1,7 +1,6 @@
-use std::iter;
-
 use crate::lhs_types::Bytes;
 use crate::{FunctionArgKind, FunctionArgs, FunctionDefinition, LhsValue, Type};
+use std::iter;
 
 /// Converts a string field to lowercase. Only uppercase ASCII bytes are converted. All other bytes are unaffected.
 /// For example, if http.host is "WWW.cloudflare.com", then lower(http.host) == "www.cloudflare.com" will return true.
