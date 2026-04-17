@@ -1,26 +1,20 @@
-use crate::{
-    ast::{
-        FilterAst, FilterValueAst,
-        parse::{FilterParser, ParseError, ParserSettings},
-    },
-    functions::FunctionDefinition,
-    lex::{Lex, LexErrorKind, LexResult, LexWith, expect, span, take_while},
-    list_matcher::ListDefinition,
-    types::{GetType, RhsValue, Type},
-};
+use crate::ast::parse::{FilterParser, ParseError, ParserSettings};
+use crate::ast::{FilterAst, FilterValueAst};
+use crate::functions::FunctionDefinition;
+use crate::lex::{Lex, LexErrorKind, LexResult, LexWith, expect, span, take_while};
+use crate::list_matcher::ListDefinition;
+use crate::types::{GetType, RhsValue, Type};
 use fnv::FnvBuildHasher;
 use serde::de::Visitor;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::convert::TryFrom;
+use std::fmt::{self, Debug, Formatter};
+use std::hash::{Hash, Hasher};
+use std::iter::Iterator;
 use std::sync::Arc;
-use std::{
-    collections::HashMap,
-    convert::TryFrom,
-    fmt::{self, Debug, Formatter},
-    hash::{Hash, Hasher},
-    iter::Iterator,
-};
 use thiserror::Error;
 
 /// An error that occurs if two underlying [schemes](struct@Scheme)
@@ -29,11 +23,9 @@ use thiserror::Error;
 #[error("underlying schemes do not match")]
 pub struct SchemeMismatchError;
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
-#[serde(tag = "kind", content = "value")]
-/// FieldIndex is an enum with variants [`ArrayIndex(usize)`],
-/// representing an index into an Array, or `[MapKey(String)`],
-/// representing a key into a Map.
+/// Enum representing either:
+/// * An array index with [`FieldIndex::ArrayIndex`]
+/// * A map key with [`FieldIndex::MapKey`]
 ///
 /// ```
 /// #[allow(dead_code)]
@@ -42,6 +34,8 @@ pub struct SchemeMismatchError;
 ///     MapKey(String),
 /// }
 /// ```
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
+#[serde(tag = "kind", content = "value")]
 pub enum FieldIndex {
     /// Index into an Array
     ArrayIndex(u32),
@@ -82,10 +76,16 @@ impl<'i> Lex<'i> for FieldIndex {
                     input,
                 )),
             },
-            RhsValue::Bytes(b) => match String::from_utf8(b.to_vec()) {
-                Ok(s) => Ok((FieldIndex::MapKey(s), rest)),
-                Err(_) => Err((LexErrorKind::ExpectedLiteral("expected utf8 string"), input)),
-            },
+            RhsValue::Bytes(b) => {
+                match simdutf8::basic::from_utf8(&b) {
+                    Ok(_) => {
+                        // SAFETY: simdutf8 just validated the bytes as valid UTF-8.
+                        let s = unsafe { String::from_utf8_unchecked(b.into()) };
+                        Ok((FieldIndex::MapKey(s), rest))
+                    }
+                    Err(_) => Err((LexErrorKind::ExpectedLiteral("expected utf8 string"), input)),
+                }
+            }
             _ => unreachable!(),
         }
     }
@@ -1270,7 +1270,8 @@ fn test_parse_error() {
 fn test_parse_error_in_op() {
     use cidr::errors::NetworkParseError;
     use indoc::indoc;
-    use std::{net::IpAddr, str::FromStr};
+    use std::net::IpAddr;
+    use std::str::FromStr;
 
     let scheme = &Scheme! {
         num: Int,

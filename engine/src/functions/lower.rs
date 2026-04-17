@@ -1,7 +1,5 @@
-use std::borrow::Cow;
-
-use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
-use crate::{LhsValue, Type};
+use crate::lhs_types::Bytes;
+use crate::{FunctionArgKind, FunctionArgs, FunctionDefinition, LhsValue, Type};
 use std::iter;
 
 /// Converts a string field to lowercase. Only uppercase ASCII bytes are converted. All other bytes are unaffected.
@@ -19,8 +17,11 @@ fn lower_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
 
     match arg {
         Ok(LhsValue::Bytes(bytes)) => {
-            let bytes_lower = bytes.into_owned().to_ascii_lowercase();
-            Some(LhsValue::Bytes(Cow::Owned(bytes_lower)))
+            let bytes_lower: Vec<u8> = bytes.into_owned().to_vec();
+            let bytes_lower = bytes_lower.to_ascii_lowercase();
+            Some(LhsValue::Bytes(Bytes::Owned(
+                bytes_lower.into_boxed_slice(),
+            )))
         }
         Err(Type::Bytes) => None,
         _ => unreachable!(),
@@ -75,31 +76,40 @@ mod tests {
     #[test]
     fn test_lower_fn() {
         // Test with an all-uppercase string
-        let mut args_upper = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"HELLO WORLD")))].into_iter();
+        let mut args_upper = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"HELLO WORLD")))].into_iter();
         assert_eq!(
             lower_impl(&mut args_upper),
-            Some(LhsValue::Bytes(Cow::Owned(b"hello world".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"hello world".to_vec().into_boxed_slice()
+            )))
         );
 
         // Test with a mixed-case string
-        let mut args_mixed = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"MiXeD CaSe")))].into_iter();
+        let mut args_mixed = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"MiXeD CaSe")))].into_iter();
         assert_eq!(
             lower_impl(&mut args_mixed),
-            Some(LhsValue::Bytes(Cow::Owned(b"mixed case".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"mixed case".to_vec().into_boxed_slice()
+            )))
         );
 
         // Test with an already lowercase string
-        let mut args_lower = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"already lower")))].into_iter();
+        let mut args_lower =
+            vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"already lower")))].into_iter();
         assert_eq!(
             lower_impl(&mut args_lower),
-            Some(LhsValue::Bytes(Cow::Owned(b"already lower".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"already lower".to_vec().into_boxed_slice()
+            )))
         );
 
         // Test with an empty string
-        let mut args_empty = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"")))].into_iter();
+        let mut args_empty = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"")))].into_iter();
         assert_eq!(
             lower_impl(&mut args_empty),
-            Some(LhsValue::Bytes(Cow::Owned(b"".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"".to_vec().into_boxed_slice()
+            )))
         );
 
         // Test with missing field
@@ -118,8 +128,8 @@ mod tests {
     #[should_panic(expected = "expected 1 argument, got 2")]
     fn test_lower_fn_too_many_args() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"a"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"b"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"a"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"b"))),
         ]
         .into_iter();
         lower_impl(&mut args);

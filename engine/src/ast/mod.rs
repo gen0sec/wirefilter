@@ -8,16 +8,14 @@ pub mod visitor;
 use self::index_expr::IndexExpr;
 use self::logical_expr::LogicalExpr;
 use self::parse::FilterParser;
-use crate::{
-    compiler::{Compiler, DefaultCompiler},
-    filter::{CompiledExpr, CompiledValueExpr, Filter, FilterValue},
-    lex::{LexErrorKind, LexResult, LexWith},
-    scheme::{Scheme, UnknownFieldError},
-    types::{GetType, Type, TypeMismatchError},
-};
+use self::visitor::{UsesListVisitor, UsesVisitor, Visitor, VisitorMut};
+use crate::compiler::{Compiler, DefaultCompiler};
+use crate::filter::{CompiledExpr, CompiledValueExpr, Filter, FilterValue};
+use crate::lex::{LexErrorKind, LexResult, LexWith};
+use crate::scheme::{Scheme, UnknownFieldError};
+use crate::types::{GetType, Type, TypeMismatchError};
 use serde::Serialize;
 use std::fmt::{self, Debug};
-use visitor::{UsesListVisitor, UsesVisitor, Visitor, VisitorMut};
 
 /// Trait used to represent node that evaluates to a [`bool`] (or a [`Vec<bool>`]).
 pub trait Expr:

@@ -8,14 +8,12 @@ mod map;
 mod regex;
 mod wildcard;
 
-pub use self::{
-    array::UninhabitedArray,
-    bool::UninhabitedBool,
-    bytes::{Bytes, BytesFormat},
-    int::IntRange,
-    ip::{ExplicitIpRange, IpCidr, IpRange},
-    list::ListName,
-    map::UninhabitedMap,
-    regex::{Error as RegexError, Regex, RegexFormat},
-    wildcard::{Wildcard, WildcardError},
-};
+pub use self::array::UninhabitedArray;
+pub use self::bool::UninhabitedBool;
+pub use self::bytes::{BytesExpr, BytesFormat};
+pub use self::int::IntRange;
+pub use self::ip::{ExplicitIpRange, IpCidr, IpRange};
+pub use self::list::ListName;
+pub use self::map::UninhabitedMap;
+pub use self::regex::{Error as RegexError, Regex, RegexFormat};
+pub use self::wildcard::{Wildcard, WildcardError};

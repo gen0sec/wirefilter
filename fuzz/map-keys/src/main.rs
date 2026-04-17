@@ -1,5 +1,4 @@
 use std::sync::LazyLock;
-
 use wirefilter::{
     FunctionArgs, LhsValue, SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl,
     SimpleFunctionParam, Type,

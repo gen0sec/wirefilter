@@ -1,9 +1,7 @@
-use crate::{
-    functions::{FunctionArgInvalidConstantError, FunctionArgKindMismatchError},
-    rhs_types::{RegexError, WildcardError},
-    scheme::{IndexAccessError, UnknownFieldError, UnknownFunctionError},
-    types::{Type, TypeMismatchError},
-};
+use crate::functions::{FunctionArgInvalidConstantError, FunctionArgKindMismatchError};
+use crate::rhs_types::{RegexError, WildcardError};
+use crate::scheme::{IndexAccessError, UnknownFieldError, UnknownFunctionError};
+use crate::types::{Type, TypeMismatchError};
 use cidr::errors::NetworkParseError;
 use std::num::ParseIntError;
 use thiserror::Error;

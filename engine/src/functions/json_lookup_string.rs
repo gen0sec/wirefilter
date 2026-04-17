@@ -1,5 +1,6 @@
 use std::iter;
 
+use crate::lhs_types::Bytes;
 use crate::{LhsValue, Type};
 
 use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
@@ -81,7 +82,7 @@ fn json_lookup_string_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a
 
     current
         .as_str()
-        .map(|s| LhsValue::Bytes(std::borrow::Cow::Owned(s.as_bytes().to_vec())))
+        .map(|s| LhsValue::Bytes(Bytes::Owned(s.as_bytes().to_vec().into_boxed_slice())))
 }
 
 impl FunctionDefinition for JsonLookupStringFunction {
@@ -132,19 +133,18 @@ impl FunctionDefinition for JsonLookupStringFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::borrow::Cow;
 
     #[test]
     fn test_lookup_json_string_basic() {
         let json = r#"{ "company": "cloudflare", "product": "rulesets" }"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"company"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"company"))),
         ]
         .into_iter();
         assert_eq!(
             json_lookup_string_impl(&mut args),
-            Some(LhsValue::Bytes(Cow::Owned(b"cloudflare".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(b"cloudflare".to_vec().into_boxed_slice())))
         );
     }
 
@@ -152,14 +152,14 @@ mod tests {
     fn test_lookup_json_string_nested() {
         let json = r#"{ "network": { "name": "cloudflare" } }"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"network"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"name"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"network"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"name"))),
         ]
         .into_iter();
         assert_eq!(
             json_lookup_string_impl(&mut args),
-            Some(LhsValue::Bytes(Cow::Owned(b"cloudflare".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(b"cloudflare".to_vec().into_boxed_slice())))
         );
     }
 
@@ -167,13 +167,13 @@ mod tests {
     fn test_lookup_json_string_array_root() {
         let json = r#"["other_company", "cloudflare"]"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
             Ok(LhsValue::Int(1)),
         ]
         .into_iter();
         assert_eq!(
             json_lookup_string_impl(&mut args),
-            Some(LhsValue::Bytes(Cow::Owned(b"cloudflare".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(b"cloudflare".to_vec().into_boxed_slice())))
         );
     }
 
@@ -181,14 +181,14 @@ mod tests {
     fn test_lookup_json_string_array_in_object() {
         let json = r#"{ "networks": ["other_company", "cloudflare"] }"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"networks"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"networks"))),
             Ok(LhsValue::Int(1)),
         ]
         .into_iter();
         assert_eq!(
             json_lookup_string_impl(&mut args),
-            Some(LhsValue::Bytes(Cow::Owned(b"cloudflare".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(b"cloudflare".to_vec().into_boxed_slice())))
         );
     }
 
@@ -196,14 +196,14 @@ mod tests {
     fn test_lookup_json_string_array_of_objects() {
         let json = r#"[{ "network": "other_company" }, { "network": "cloudflare" }]"#;
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(json.as_bytes()))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(json.as_bytes()))),
             Ok(LhsValue::Int(1)),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"network"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"network"))),
         ]
         .into_iter();
         assert_eq!(
             json_lookup_string_impl(&mut args),
-            Some(LhsValue::Bytes(Cow::Owned(b"cloudflare".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(b"cloudflare".to_vec().into_boxed_slice())))
         );
     }
 }

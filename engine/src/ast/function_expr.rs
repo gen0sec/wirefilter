@@ -1,26 +1,20 @@
-use super::{
-    ValueExpr,
-    parse::FilterParser,
-    visitor::{Visitor, VisitorMut},
+use super::ValueExpr;
+use super::parse::FilterParser;
+use super::visitor::{Visitor, VisitorMut};
+use crate::FunctionRef;
+use crate::ast::field_expr::{ComparisonExpr, ComparisonOp, ComparisonOpExpr};
+use crate::ast::index_expr::IndexExpr;
+use crate::ast::logical_expr::{LogicalExpr, UnaryOp};
+use crate::compiler::Compiler;
+use crate::filter::{CompiledExpr, CompiledValueExpr, CompiledValueResult};
+use crate::functions::{
+    ExactSizeChain, FunctionArgs, FunctionDefinition, FunctionDefinitionContext, FunctionParam,
+    FunctionParamError,
 };
-use crate::{
-    FunctionRef,
-    ast::{
-        field_expr::{ComparisonExpr, ComparisonOp, ComparisonOpExpr},
-        index_expr::IndexExpr,
-        logical_expr::{LogicalExpr, UnaryOp},
-    },
-    compiler::Compiler,
-    filter::{CompiledExpr, CompiledValueExpr, CompiledValueResult},
-    functions::{
-        ExactSizeChain, FunctionArgs, FunctionDefinition, FunctionDefinitionContext, FunctionParam,
-        FunctionParamError,
-    },
-    lex::{Lex, LexError, LexErrorKind, LexResult, LexWith, expect, skip_space, span},
-    lhs_types::Array,
-    scheme::Function,
-    types::{GetType, LhsValue, RhsValue, Type},
-};
+use crate::lex::{Lex, LexError, LexErrorKind, LexResult, LexWith, expect, skip_space, span};
+use crate::lhs_types::Array;
+use crate::scheme::Function;
+use crate::types::{GetType, LhsValue, RhsValue, Type};
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use std::iter::once;
@@ -295,7 +289,7 @@ impl ValueExpr for FunctionCallExpr {
                 // Extract the values of the map
                 if let LhsValue::Map(map) = first {
                     first = LhsValue::Array(
-                        Array::try_from_iter(map.value_type(), map.values_into_iter()).unwrap(),
+                        Array::try_from_iter(map.value_type(), map.into_values()).unwrap(),
                     );
                 }
                 // Retrieve the underlying `Array`
@@ -526,21 +520,17 @@ impl<'i> LexWith<'i, &FilterParser<'_>> for FunctionCallExpr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        SimpleFunctionArgKind,
-        ast::{
-            field_expr::{ComparisonExpr, ComparisonOpExpr, IdentifierExpr, OrderingOp},
-            logical_expr::{LogicalExpr, LogicalOp, ParenthesizedExpr},
-            parse::FilterParser,
-        },
-        functions::{
-            FunctionArgKind, FunctionArgKindMismatchError, FunctionArgs, SimpleFunctionDefinition,
-            SimpleFunctionImpl, SimpleFunctionOptParam, SimpleFunctionParam,
-        },
-        rhs_types::{Bytes, BytesFormat},
-        scheme::{FieldIndex, IndexAccessError, Scheme},
-        types::{RhsValues, Type, TypeMismatchError},
+    use crate::SimpleFunctionArgKind;
+    use crate::ast::field_expr::{ComparisonExpr, ComparisonOpExpr, IdentifierExpr, OrderingOp};
+    use crate::ast::logical_expr::{LogicalExpr, LogicalOp, ParenthesizedExpr};
+    use crate::ast::parse::FilterParser;
+    use crate::functions::{
+        FunctionArgKind, FunctionArgKindMismatchError, FunctionArgs, SimpleFunctionDefinition,
+        SimpleFunctionImpl, SimpleFunctionOptParam, SimpleFunctionParam,
     };
+    use crate::rhs_types::{BytesExpr, BytesFormat};
+    use crate::scheme::{FieldIndex, IndexAccessError, Scheme};
+    use crate::types::{RhsValues, Type, TypeMismatchError};
     use std::convert::TryFrom;
     use std::sync::LazyLock;
 
@@ -562,13 +552,10 @@ mod tests {
     }
 
     fn lower_function<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
-        use std::borrow::Cow;
-
         match args.next()? {
             Ok(LhsValue::Bytes(mut b)) => {
-                let mut text: Vec<u8> = b.to_mut().to_vec();
-                text.make_ascii_lowercase();
-                Some(LhsValue::Bytes(Cow::Owned(text)))
+                b.to_mut().make_ascii_lowercase();
+                Some(LhsValue::Bytes(b))
             }
             Err(Type::Bytes) => None,
             _ => unreachable!(),
@@ -1265,8 +1252,8 @@ mod tests {
                         identifier: IdentifierExpr::Field(SCHEME.get_field("http.host").unwrap().to_owned()),
                         indexes: vec![],
                     }),
-                    FunctionCallArgExpr::Literal(RhsValue::Bytes(Bytes::new("this is a r##raw## string".as_bytes(), BytesFormat::Raw(0)))),
-                    FunctionCallArgExpr::Literal(RhsValue::Bytes(Bytes::new("this is a new r##raw## string".as_bytes(), BytesFormat::Raw(0))))
+                    FunctionCallArgExpr::Literal(RhsValue::Bytes(BytesExpr::new("this is a r##raw## string".as_bytes(), BytesFormat::Raw(0)))),
+                    FunctionCallArgExpr::Literal(RhsValue::Bytes(BytesExpr::new("this is a new r##raw## string".as_bytes(), BytesFormat::Raw(0))))
                 ],
                 context: None,
             },
@@ -1306,8 +1293,8 @@ mod tests {
                         identifier: IdentifierExpr::Field(SCHEME.get_field("http.host").unwrap().to_owned()),
                         indexes: vec![],
                     }),
-                    FunctionCallArgExpr::Literal(RhsValue::Bytes(Bytes::new("this is a r##\"raw\"## string".as_bytes(), BytesFormat::Raw(3)))),
-                    FunctionCallArgExpr::Literal(RhsValue::Bytes(Bytes::new("this is a new r##\"raw\"## string".as_bytes(), BytesFormat::Raw(3))))
+                    FunctionCallArgExpr::Literal(RhsValue::Bytes(BytesExpr::new("this is a r##\"raw\"## string".as_bytes(), BytesFormat::Raw(3)))),
+                    FunctionCallArgExpr::Literal(RhsValue::Bytes(BytesExpr::new("this is a new r##\"raw\"## string".as_bytes(), BytesFormat::Raw(3))))
                 ],
                 context: None,
             },

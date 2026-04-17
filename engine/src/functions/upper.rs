@@ -1,8 +1,7 @@
-use std::borrow::Cow;
-
-use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
-use crate::{LhsValue, Type};
 use std::iter;
+
+use crate::lhs_types::Bytes;
+use crate::{FunctionArgKind, FunctionArgs, FunctionDefinition, LhsValue, Type};
 
 /// Converts a string field to uppercase. Only lowercase ASCII bytes are converted. All other bytes are unaffected.
 /// For example, if http.host is "www.cloudflare.com", then upper(http.host) will return "WWW.CLOUDFLARE.COM".
@@ -19,8 +18,9 @@ fn upper_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
 
     match arg {
         Ok(LhsValue::Bytes(bytes)) => {
-            let bytes_upper = bytes.into_owned().to_ascii_uppercase();
-            Some(LhsValue::Bytes(Cow::Owned(bytes_upper)))
+            let bytes_upper: Vec<u8> = bytes.into_owned().to_vec();
+            let bytes_upper = bytes_upper.to_ascii_uppercase();
+            Some(LhsValue::Bytes(Bytes::Owned(bytes_upper.into_boxed_slice())))
         }
         Err(Type::Bytes) => None,
         _ => unreachable!(),
@@ -75,39 +75,39 @@ mod tests {
     #[test]
     fn test_upper_fn() {
         // Test with an all-lowercase string
-        let mut args_lower = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"hello world")))].into_iter();
+        let mut args_lower = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"hello world")))].into_iter();
         assert_eq!(
             upper_impl(&mut args_lower),
-            Some(LhsValue::Bytes(Cow::Owned(b"HELLO WORLD".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(b"HELLO WORLD".to_vec().into_boxed_slice())))
         );
 
         // Test with a mixed-case string
-        let mut args_mixed = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"MiXeD CaSe")))].into_iter();
+        let mut args_mixed = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"MiXeD CaSe")))].into_iter();
         assert_eq!(
             upper_impl(&mut args_mixed),
-            Some(LhsValue::Bytes(Cow::Owned(b"MIXED CASE".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(b"MIXED CASE".to_vec().into_boxed_slice())))
         );
 
         // Test with an already uppercase string
-        let mut args_upper = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"ALREADY UPPER")))].into_iter();
+        let mut args_upper = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"ALREADY UPPER")))].into_iter();
         assert_eq!(
             upper_impl(&mut args_upper),
-            Some(LhsValue::Bytes(Cow::Owned(b"ALREADY UPPER".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(b"ALREADY UPPER".to_vec().into_boxed_slice())))
         );
 
         // Test with the example from the specification: "www.cloudflare.com"
         let mut args_example =
-            vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"www.cloudflare.com")))].into_iter();
+            vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"www.cloudflare.com")))].into_iter();
         assert_eq!(
             upper_impl(&mut args_example),
-            Some(LhsValue::Bytes(Cow::Owned(b"WWW.CLOUDFLARE.COM".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(b"WWW.CLOUDFLARE.COM".to_vec().into_boxed_slice())))
         );
 
         // Test with an empty string
-        let mut args_empty = vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"")))].into_iter();
+        let mut args_empty = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"")))].into_iter();
         assert_eq!(
             upper_impl(&mut args_empty),
-            Some(LhsValue::Bytes(Cow::Owned(b"".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(b"".to_vec().into_boxed_slice())))
         );
 
         // Test with missing field
@@ -116,10 +116,10 @@ mod tests {
 
         // Test that only ASCII lowercase bytes are converted, other bytes are unaffected
         let mut args_non_ascii =
-            vec![Ok(LhsValue::Bytes(Cow::Borrowed(b"hello\xc3\xa9world")))].into_iter();
+            vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"hello\xc3\xa9world")))].into_iter();
         assert_eq!(
             upper_impl(&mut args_non_ascii),
-            Some(LhsValue::Bytes(Cow::Owned(b"HELLO\xc3\xa9WORLD".to_vec())))
+            Some(LhsValue::Bytes(Bytes::Owned(b"HELLO\xc3\xa9WORLD".to_vec().into_boxed_slice())))
         );
     }
 
@@ -134,8 +134,8 @@ mod tests {
     #[should_panic(expected = "expected 1 argument, got 2")]
     fn test_upper_fn_too_many_args() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"a"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"b"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"a"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"b"))),
         ]
         .into_iter();
         upper_impl(&mut args);

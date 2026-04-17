@@ -1,10 +1,8 @@
-use super::{
-    Expr, ValueExpr,
-    field_expr::{ComparisonExpr, ComparisonOpExpr},
-    function_expr::{FunctionCallArgExpr, FunctionCallExpr},
-    index_expr::IndexExpr,
-    logical_expr::LogicalExpr,
-};
+use super::field_expr::{ComparisonExpr, ComparisonOpExpr};
+use super::function_expr::{FunctionCallArgExpr, FunctionCallExpr};
+use super::index_expr::IndexExpr;
+use super::logical_expr::LogicalExpr;
+use super::{Expr, ValueExpr};
 use crate::{Field, FieldRef, Function};
 
 /// Trait used to immutably visit all nodes in the AST.

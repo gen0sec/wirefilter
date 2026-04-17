@@ -3,47 +3,34 @@ pub(crate) mod any;
 pub(crate) mod cidr;
 pub(crate) mod concat;
 pub(crate) mod decode_base64;
-pub(crate) mod ends_with;
-pub(crate) mod json_lookup_integer;
-pub(crate) mod json_lookup_string;
 pub(crate) mod len;
 pub(crate) mod lower;
 pub(crate) mod remove_bytes;
-pub(crate) mod remove_query_args;
 pub(crate) mod starts_with;
 pub(crate) mod substring;
-pub(crate) mod to_string;
-pub(crate) mod upper;
 pub(crate) mod url_decode;
 pub(crate) mod uuid4;
 pub(crate) mod wildcard_replace;
 
-use crate::{
-    ParserSettings,
-    filter::CompiledValueResult,
-    types::{ExpectedType, ExpectedTypeList, GetType, LhsValue, RhsValue, Type, TypeMismatchError},
+use crate::ParserSettings;
+use crate::filter::CompiledValueResult;
+use crate::types::{
+    ExpectedType, ExpectedTypeList, GetType, LhsValue, RhsValue, Type, TypeMismatchError,
 };
 pub use all::AllFunction;
 pub use any::AnyFunction;
 pub use cidr::CIDRFunction;
 pub use concat::ConcatFunction;
 pub use decode_base64::DecodeBase64Function;
-pub use ends_with::EndsWithFunction;
-pub use json_lookup_integer::JsonLookupIntegerFunction;
-pub use json_lookup_string::JsonLookupStringFunction;
 pub use len::LenFunction;
 pub use lower::LowerFunction;
 pub use remove_bytes::RemoveBytesFunction;
-pub use remove_query_args::RemoveQueryArgsFunction;
 pub use starts_with::StartsWithFunction;
 use std::any::Any;
-use std::convert::TryFrom;
 use std::fmt::{self, Debug};
 use std::iter::once;
 pub use substring::SubstringFunction;
 use thiserror::Error;
-pub use to_string::ToStringFunction;
-pub use upper::UpperFunction;
 pub use url_decode::UrlDecodeFunction;
 pub use uuid4::UUID4Function;
 pub use wildcard_replace::WildcardReplaceFunction;
@@ -439,7 +426,7 @@ pub trait FunctionDefinition: Debug + Send + Sync {
     ) -> Box<dyn for<'i, 'a> Fn(FunctionArgs<'i, 'a>) -> Option<LhsValue<'a>> + Sync + Send + 'static>;
 }
 
-/* Simple function APIs */
+// Simple function APIs
 
 type FunctionPtr = for<'i, 'a> fn(FunctionArgs<'i, 'a>) -> Option<LhsValue<'a>>;
 

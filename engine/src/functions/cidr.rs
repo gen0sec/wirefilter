@@ -1,9 +1,6 @@
-use std::{
-    iter,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
-};
-
 use crate::{FunctionArgs, FunctionDefinition, LhsValue, Type};
+use std::iter;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 /// `cidr` Function (Cloudflare Ruleset Engine)
 ///

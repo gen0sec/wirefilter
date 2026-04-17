@@ -101,13 +101,13 @@ impl FunctionDefinition for LenFunction {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::lhs_types::Bytes;
     use crate::{Array, Type};
-    use std::borrow::Cow;
 
     #[test]
     fn test_ln_fn() {
         // Test with LhsValue::Bytes
-        let bytes_val = LhsValue::Bytes(Cow::Borrowed(b"hello"));
+        let bytes_val = LhsValue::Bytes(Bytes::Borrowed(b"hello"));
         let mut args_bytes = vec![Ok(bytes_val)].into_iter();
         assert_eq!(len_impl(&mut args_bytes), Some(LhsValue::Int(5)));
 
@@ -116,7 +116,7 @@ mod test {
         assert_eq!(len_impl(&mut args_array), Some(LhsValue::Int(3)));
 
         // Test with empty LhsValue::Bytes
-        let empty_bytes_val = LhsValue::Bytes(Cow::Borrowed(b""));
+        let empty_bytes_val = LhsValue::Bytes(Bytes::Borrowed(b""));
         let mut args_empty_bytes = vec![Ok(empty_bytes_val)].into_iter();
         assert_eq!(len_impl(&mut args_empty_bytes), Some(LhsValue::Int(0)));
 
@@ -144,8 +144,8 @@ mod test {
     #[test]
     #[should_panic(expected = "expected 1 argument, got 2")]
     fn test_len_fn_too_many_args() {
-        let val1 = LhsValue::Bytes(Cow::Borrowed(b"a"));
-        let val2 = LhsValue::Bytes(Cow::Borrowed(b"b"));
+        let val1 = LhsValue::Bytes(Bytes::Borrowed(b"a"));
+        let val2 = LhsValue::Bytes(Bytes::Borrowed(b"b"));
         let mut args = vec![Ok(val1), Ok(val2)].into_iter();
         len_impl(&mut args);
     }
@@ -153,9 +153,9 @@ mod test {
     #[test]
     #[should_panic(expected = "expected 1 argument, got 3")]
     fn test_len_fn_three_args() {
-        let val1 = LhsValue::Bytes(Cow::Borrowed(b"a"));
-        let val2 = LhsValue::Bytes(Cow::Borrowed(b"b"));
-        let val3 = LhsValue::Bytes(Cow::Borrowed(b"c"));
+        let val1 = LhsValue::Bytes(Bytes::Borrowed(b"a"));
+        let val2 = LhsValue::Bytes(Bytes::Borrowed(b"b"));
+        let val3 = LhsValue::Bytes(Bytes::Borrowed(b"c"));
         let mut args = vec![Ok(val1), Ok(val2), Ok(val3)].into_iter();
         len_impl(&mut args);
     }

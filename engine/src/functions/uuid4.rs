@@ -1,18 +1,19 @@
+use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
+use crate::lhs_types::Bytes;
+use crate::{LhsValue, Type};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use std::borrow::Cow;
-
-use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
-use crate::{LhsValue, Type};
 use std::iter;
 
 /// Generates a random UUIDv4 (Universally Unique Identifier, version 4) based on the given argument (a source of randomness).
 /// To obtain an array of random bytes, use the cf.random_seed field.
 /// For example, uuidv4(cf.random_seed) will return a UUIDv4 similar to 49887398-6bcf-485f-8899-f15dbef4d1d5.
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub struct UUID4Function {}
 
 #[inline]
+#[allow(dead_code)]
 fn uuid4_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     let arg = args.next().expect("expected 1 argument, got 0");
 
@@ -63,7 +64,9 @@ fn uuid4_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
                 uuid_bytes[15]
             );
 
-            Some(LhsValue::Bytes(Cow::Owned(uuid_string.into_bytes())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                uuid_string.into_bytes().into_boxed_slice(),
+            )))
         }
         Err(Type::Bytes) => None,
         _ => unreachable!(),
@@ -119,7 +122,7 @@ mod tests {
     fn test_uuid4_fn() {
         // Test with some seed bytes
         let seed_bytes = b"\x12\x34\x56\x78\x9a\xbc\xde\xf0";
-        let mut args = vec![Ok(LhsValue::Bytes(Cow::Borrowed(seed_bytes)))].into_iter();
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(seed_bytes)))].into_iter();
 
         let result = uuid4_impl(&mut args);
         assert!(result.is_some());
@@ -149,10 +152,10 @@ mod tests {
         // Test that same seed produces same UUID (deterministic)
         let seed_bytes = b"test_seed_12345";
 
-        let mut args1 = vec![Ok(LhsValue::Bytes(Cow::Borrowed(seed_bytes)))].into_iter();
+        let mut args1 = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(seed_bytes)))].into_iter();
         let result1 = uuid4_impl(&mut args1);
 
-        let mut args2 = vec![Ok(LhsValue::Bytes(Cow::Borrowed(seed_bytes)))].into_iter();
+        let mut args2 = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(seed_bytes)))].into_iter();
         let result2 = uuid4_impl(&mut args2);
 
         assert_eq!(result1, result2);
@@ -164,10 +167,10 @@ mod tests {
         let seed1 = b"seed1";
         let seed2 = b"seed2";
 
-        let mut args1 = vec![Ok(LhsValue::Bytes(Cow::Borrowed(seed1)))].into_iter();
+        let mut args1 = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(seed1)))].into_iter();
         let result1 = uuid4_impl(&mut args1);
 
-        let mut args2 = vec![Ok(LhsValue::Bytes(Cow::Borrowed(seed2)))].into_iter();
+        let mut args2 = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(seed2)))].into_iter();
         let result2 = uuid4_impl(&mut args2);
 
         assert_ne!(result1, result2);
@@ -177,7 +180,7 @@ mod tests {
     fn test_uuid4_fn_short_seed() {
         // Test with a single byte seed (should work)
         let short_seed = b"a";
-        let mut args = vec![Ok(LhsValue::Bytes(Cow::Borrowed(short_seed)))].into_iter();
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(short_seed)))].into_iter();
 
         let result = uuid4_impl(&mut args);
         assert!(result.is_some());
@@ -195,7 +198,7 @@ mod tests {
     fn test_uuid4_fn_empty_bytes() {
         // Test with empty bytes (should return None now)
         let empty_bytes = b"";
-        let mut args = vec![Ok(LhsValue::Bytes(Cow::Borrowed(empty_bytes)))].into_iter();
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(empty_bytes)))].into_iter();
 
         let result = uuid4_impl(&mut args);
         assert_eq!(result, None);
@@ -205,7 +208,7 @@ mod tests {
     fn test_uuid4_fn_long_seed() {
         // Test with a long seed (should work with any length)
         let long_seed = b"this_is_a_very_long_seed_with_many_bytes_to_test_entropy_mixing";
-        let mut args = vec![Ok(LhsValue::Bytes(Cow::Borrowed(long_seed)))].into_iter();
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(long_seed)))].into_iter();
 
         let result = uuid4_impl(&mut args);
         assert!(result.is_some());
@@ -237,8 +240,8 @@ mod tests {
     #[should_panic(expected = "expected 1 argument, got 2")]
     fn test_uuid4_fn_too_many_args() {
         let mut args = vec![
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"a"))),
-            Ok(LhsValue::Bytes(Cow::Borrowed(b"b"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"a"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"b"))),
         ]
         .into_iter();
         uuid4_impl(&mut args);

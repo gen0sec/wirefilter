@@ -1,5 +1,4 @@
-use std::borrow::Cow;
-
+use crate::lhs_types::Bytes;
 use crate::{LhsValue, Type};
 
 use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
@@ -40,9 +39,9 @@ fn to_string_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     }
 
     match arg {
-        Ok(LhsValue::Int(i)) => Some(LhsValue::Bytes(Cow::Owned(i.to_string().into_bytes()))),
-        Ok(LhsValue::Bool(b)) => Some(LhsValue::Bytes(Cow::Owned(b.to_string().into_bytes()))),
-        Ok(LhsValue::Ip(ip)) => Some(LhsValue::Bytes(Cow::Owned(ip.to_string().into_bytes()))),
+        Ok(LhsValue::Int(i)) => Some(LhsValue::Bytes(Bytes::Owned(i.to_string().into_boxed_str().into_boxed_bytes()))),
+        Ok(LhsValue::Bool(b)) => Some(LhsValue::Bytes(Bytes::Owned(b.to_string().into_boxed_str().into_boxed_bytes()))),
+        Ok(LhsValue::Ip(ip)) => Some(LhsValue::Bytes(Bytes::Owned(ip.to_string().into_boxed_str().into_boxed_bytes()))),
         Err(Type::Int) | Err(Type::Bool) | Err(Type::Ip) => None,
         _ => unreachable!(),
     }
@@ -97,7 +96,7 @@ mod tests {
     use std::borrow::Cow;
 
     fn owned(s: &str) -> LhsValue<'_> {
-        LhsValue::Bytes(Cow::Owned(s.as_bytes().to_vec()))
+        LhsValue::Bytes(Bytes::Owned(s.as_bytes().to_vec().into_boxed_slice()))
     }
 
     #[test]
