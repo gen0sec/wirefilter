@@ -95,3 +95,60 @@ Try deleting the compiled binary and re-building with `cargo afl build`.
 ## Licensing
 
 Licensed under the MIT license. See the [LICENSE](LICENSE) file for details.
+
+## Release Process
+
+The `wirefilter-engine` crate (workspace member) is published to the
+private `gen0sec` Cargo registry (`https://crates-internal.g0s.dev`).
+The other workspace members (`wirefilter-ffi`, `wirefilter-wasm`, fuzz
+targets) are marked `publish = false` and are not released. Releases
+are driven by `vX.Y.Z` git tags — `.github/workflows/release.yaml`
+handles build, publish, and GitHub Release creation.
+
+### One-time setup
+
+- **Repo secret**: `GEN0SEC_CARGO_TOKEN` — bearer token for the registry.
+- **`release` GitHub environment** (Settings → Environments → New) for
+  optional manual approval gating before publish.
+- **Local cargo config** (`~/.cargo/config.toml`):
+
+  ```toml
+  [registries.gen0sec]
+  index = "sparse+https://crates-internal.g0s.dev/api/v1/crates/"
+  credential-provider = ["cargo:token"]
+  token = "<your_token>"
+  ```
+
+### Cutting a release
+
+The workspace version lives in `[workspace.package]` in the root
+`Cargo.toml`. Use `cargo-release` from the workspace root:
+
+```bash
+cargo install cargo-release
+cargo release patch --execute   # or minor / major / 1.2.3
+```
+
+It bumps the workspace version + `Cargo.lock`, commits, creates
+`vX.Y.Z`, and pushes. CI publishes on the tag push.
+`[package.metadata.release] publish = false` in `engine/Cargo.toml`
+keeps the local command from publishing — that is left to CI.
+
+### CI jobs on `v*` tag
+
+1. **`verify-version`** — fails if tag does not match the workspace
+   version.
+2. **`package-crate`** — `cargo package -p wirefilter-engine --registry gen0sec --locked`,
+   uploads `wirefilter-engine-X.Y.Z.crate`.
+3. **`publish`** — `release` environment-gated
+   `cargo publish -p wirefilter-engine` with retry/timeout hardening.
+4. **`gh-release`** — downloads `.crate`, generates SHA256 sidecars,
+   creates a GitHub Release.
+
+### Required Cargo.toml metadata
+
+The gen0sec registry enforces these `[package]` fields on
+`wirefilter-engine`:
+
+`name`, `description`, `repository`, `license`, `authors`, `categories`,
+`keywords`, `links`, `readme`.

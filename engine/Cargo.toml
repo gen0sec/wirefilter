@@ -8,7 +8,13 @@ readme = "README.md"
 repository = "https://github.com/cloudflare/wirefilter"
 keywords = ["engine", "filter", "parser", "runtime", "wireshark"]
 categories = ["config", "parser-implementations"]
+license = "MIT"
+links = "wirefilter-engine"
 publish.workspace = true
+
+[package.metadata.release]
+publish = false
+tag-name = "v{{version}}"
 
 [lib]
 bench = false
