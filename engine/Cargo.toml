@@ -6,9 +6,9 @@ edition.workspace = true
 description = "An execution engine for Wireshark-like filters"
 readme = "README.md"
 repository = "https://github.com/cloudflare/wirefilter"
+license = "MIT"
 keywords = ["engine", "filter", "parser", "runtime", "wireshark"]
 categories = ["config", "parser-implementations"]
-license = "MIT"
 links = "wirefilter-engine"
 publish.workspace = true
 
