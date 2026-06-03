@@ -96,7 +96,7 @@ pub use self::filter::{
     CompiledExpr, CompiledOneExpr, CompiledValueExpr, CompiledVecExpr, Filter, FilterValue,
 };
 pub use self::functions::{
-    AllFunction, AnyFunction, CIDRFunction, ConcatFunction, DecodeBase64Function,
+    AllFunction, AnyFunction, CIDRFunction, ConcatFunction, DecodeBase64Function, EndsWithFunction,
     FunctionArgInvalidConstantError, FunctionArgKind, FunctionArgKindMismatchError, FunctionArgs,
     FunctionDefinition, FunctionDefinitionContext, FunctionParam, FunctionParamError, LenFunction,
     LowerFunction, RemoveBytesFunction, SimpleFunctionArgKind, SimpleFunctionDefinition,

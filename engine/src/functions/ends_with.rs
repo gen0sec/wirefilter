@@ -82,14 +82,14 @@ mod tests {
     #[test]
     fn test_ends_with_fn() {
         let mut true_args = vec![
-            Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value")),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value"))),
             Ok(LhsValue::Bytes(Bytes::Borrowed(b"value"))),
         ]
         .into_iter();
         assert_eq!(ends_with_impl(&mut true_args), Some(LhsValue::Bool(true)));
 
         let mut false_args = vec![
-            Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value")),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value"))),
             Ok(LhsValue::Bytes(Bytes::Borrowed(b"exampl"))),
         ]
         .into_iter();
@@ -106,7 +106,7 @@ mod tests {
         );
 
         let mut empty_substring_args = vec![
-            Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value")),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value"))),
             Ok(LhsValue::Bytes(Bytes::Borrowed(b""))),
         ]
         .into_iter();
