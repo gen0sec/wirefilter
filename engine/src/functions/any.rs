@@ -1,10 +1,9 @@
 use crate::{
-    FunctionArgKind, FunctionArgs, FunctionDefinition, FunctionDefinitionContext, FunctionParam,
-    FunctionParamError, GetType, LhsValue, ParserSettings, Type,
+    CompiledFunction, FunctionArgKind, FunctionArgs, FunctionDefinition, FunctionDefinitionContext,
+    FunctionParam, FunctionParamError, GetType, LhsValue, ParserSettings, Type,
 };
 use std::iter::once;
 
-#[inline]
 fn any_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     let arg = args.next().expect("expected 1 argument, got 0");
     if args.next().is_some() {
@@ -58,12 +57,11 @@ impl FunctionDefinition for AnyFunction {
         (1, Some(0))
     }
 
-    fn compile<'s>(
-        &'s self,
+    fn compile(
+        &self,
         _: &mut dyn ExactSizeIterator<Item = FunctionParam<'_>>,
         _: Option<FunctionDefinitionContext>,
-    ) -> Box<dyn for<'i, 'a> Fn(FunctionArgs<'i, 'a>) -> Option<LhsValue<'a>> + Sync + Send + 'static>
-    {
+    ) -> CompiledFunction {
         Box::new(any_impl)
     }
 }

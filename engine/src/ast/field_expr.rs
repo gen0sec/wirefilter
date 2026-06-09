@@ -255,7 +255,8 @@ impl<'i, 's> LexWith<'i, &FilterParser<'s>> for IdentifierExpr {
         match item {
             Identifier::Field(field) => Ok((IdentifierExpr::Field(field.to_owned()), input)),
             Identifier::Function(function) => {
-                FunctionCallExpr::lex_with_function(input, parser, function)
+                let nested_parser = parser.with_increased_nesting(skip_space(input))?;
+                FunctionCallExpr::lex_with_function(input, &nested_parser, function)
                     .map(|(call, input)| (IdentifierExpr::FunctionCallExpr(call), input))
             }
         }
@@ -798,9 +799,9 @@ mod tests {
     use crate::ast::logical_expr::LogicalExpr;
     use crate::execution_context::ExecutionContext;
     use crate::functions::{
-        FunctionArgKind, FunctionArgs, FunctionDefinition, FunctionDefinitionContext,
-        FunctionParam, FunctionParamError, SimpleFunctionDefinition, SimpleFunctionImpl,
-        SimpleFunctionOptParam, SimpleFunctionParam,
+        AllFunction, CompiledFunction, FunctionArgKind, FunctionArgs, FunctionDefinition,
+        FunctionDefinitionContext, FunctionParam, FunctionParamError, SimpleFunctionDefinition,
+        SimpleFunctionImpl, SimpleFunctionOptParam, SimpleFunctionParam,
     };
     use crate::lhs_types::{Array, Map};
     use crate::list_matcher::{ListDefinition, ListMatcher};
@@ -906,12 +907,7 @@ mod tests {
             &self,
             _: &mut dyn ExactSizeIterator<Item = FunctionParam<'_>>,
             _: Option<FunctionDefinitionContext>,
-        ) -> Box<
-            dyn for<'i, 'a> Fn(FunctionArgs<'i, 'a>) -> Option<LhsValue<'a>>
-                + Sync
-                + Send
-                + 'static,
-        > {
+        ) -> CompiledFunction {
             Box::new(|args| {
                 let value_array = Array::try_from(args.next().unwrap().unwrap()).unwrap();
                 let keep_array = Array::try_from(args.next().unwrap().unwrap()).unwrap();
@@ -970,6 +966,8 @@ mod tests {
             tcp.port: Int,
             tcp.ports: Array(Int),
             array.of.bool: Array(Bool),
+            map.bool.arr: Map(Array(Bool)),
+            map.bytes.arr: Map(Array(Bytes)),
             http.parts: Array(Array(Bytes)),
         };
         builder
@@ -986,6 +984,7 @@ mod tests {
                 },
             )
             .unwrap();
+        builder.add_function("all", AllFunction::default()).unwrap();
         builder
             .add_function(
                 "echo",
@@ -2634,6 +2633,34 @@ mod tests {
 
         ctx.set_field_value(field("tcp.ports"), arr2).unwrap();
         assert_eq!(expr.execute_one(ctx), false);
+    }
+
+    #[test]
+    fn test_any_all_functions_with_missing_arrays() {
+        let ctx = &mut ExecutionContext::new(&SCHEME);
+        ctx.set_field_value(
+            field("map.bool.arr"),
+            Map::new(Type::Array(Type::Bool.into())),
+        )
+        .unwrap();
+        ctx.set_field_value(
+            field("map.bytes.arr"),
+            Map::new(Type::Array(Type::Bytes.into())),
+        )
+        .unwrap();
+
+        let execute = |input| SCHEME.parse(input).unwrap().compile().execute(ctx).unwrap();
+
+        assert_eq!(execute(r#"any(map.bool.arr["missing"])"#), false);
+        assert_eq!(execute(r#"all(map.bool.arr["missing"])"#), false);
+        assert_eq!(
+            execute(r#"any(map.bytes.arr["missing"][*] matches "bar")"#),
+            false
+        );
+        assert_eq!(
+            execute(r#"all(map.bytes.arr["missing"][*] matches "bar")"#),
+            true
+        );
     }
 
     #[test]
