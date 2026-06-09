@@ -1,9 +1,7 @@
-use std::collections::HashSet;
-
+use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
 use crate::lhs_types::Bytes;
 use crate::{LhsValue, Type};
-
-use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
+use std::collections::HashSet;
 
 /// Removes one or more query string parameters from a URI query string.
 ///

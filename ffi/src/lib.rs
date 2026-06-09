@@ -17,9 +17,10 @@ use std::net::IpAddr;
 use std::ops::{Deref, DerefMut};
 use wirefilter::{
     AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, DecodeBase64Function,
-    GetType, LenFunction, LowerFunction, NeverList, RemoveBytesFunction, StartsWithFunction,
-    SubstringFunction, Type, UUID4Function, UrlDecodeFunction, WildcardReplaceFunction,
-    catch_panic,
+    EndsWithFunction, GetType, JsonLookupIntegerFunction, JsonLookupStringFunction, LenFunction,
+    LowerFunction, NeverList, RemoveBytesFunction, RemoveQueryArgsFunction,
+    StartsWithFunction, SubstringFunction, ToStringFunction, Type, UUID4Function, UpperFunction,
+    UrlDecodeFunction, WildcardReplaceFunction, catch_panic,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -399,6 +400,53 @@ pub extern "C" fn wirefilter_add_function_to_scheme(
                 false
             }
         },
+        "ends_with" => match builder.add_function(name, EndsWithFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "upper" => match builder.add_function(name, UpperFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "to_string" => match builder.add_function(name, ToStringFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "remove_query_args" => match builder.add_function(name, RemoveQueryArgsFunction::default())
+        {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "lookup_json_string" => {
+            match builder.add_function(name, JsonLookupStringFunction::default()) {
+                Ok(_) => true,
+                Err(err) => {
+                    write_last_error!("{}", err);
+                    false
+                }
+            }
+        }
+        "lookup_json_integer" => {
+            match builder.add_function(name, JsonLookupIntegerFunction::default()) {
+                Ok(_) => true,
+                Err(err) => {
+                    write_last_error!("{}", err);
+                    false
+                }
+            }
+        }
         _ => {
             write_last_error!("Unknown function name provided: {}", name);
             false
