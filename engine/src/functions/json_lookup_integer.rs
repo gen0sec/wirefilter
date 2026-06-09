@@ -1,9 +1,6 @@
-use std::iter;
-
-use crate::lhs_types::Bytes;
-use crate::{LhsValue, Type};
-
 use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
+use crate::{LhsValue, Type};
+use std::iter;
 
 /// Returns the integer value associated with the supplied key in `field`.
 ///
@@ -134,6 +131,7 @@ impl FunctionDefinition for JsonLookupIntegerFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lhs_types::Bytes;
 
     #[test]
     fn test_lookup_json_integer_basic() {

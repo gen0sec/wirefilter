@@ -99,10 +99,11 @@ pub use self::functions::{
     AllFunction, AnyFunction, CIDRFunction, CompiledFunction, ConcatFunction, DecodeBase64Function,
     EndsWithFunction, FunctionArgInvalidConstantError, FunctionArgKind,
     FunctionArgKindMismatchError, FunctionArgs, FunctionDefinition, FunctionDefinitionContext,
-    FunctionParam, FunctionParamError, LenFunction, LowerFunction, RegexReplaceFunction,
-    RemoveBytesFunction, SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl,
-    SimpleFunctionOptParam, SimpleFunctionParam, StartsWithFunction, SubstringFunction,
-    UUID4Function, UrlDecodeFunction, WildcardReplaceFunction,
+    FunctionParam, FunctionParamError, JsonLookupIntegerFunction, JsonLookupStringFunction,
+    LenFunction, LowerFunction, RegexReplaceFunction, RemoveBytesFunction, RemoveQueryArgsFunction,
+    SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionOptParam,
+    SimpleFunctionParam, StartsWithFunction, SubstringFunction, ToStringFunction, UUID4Function,
+    UpperFunction, UrlDecodeFunction, WildcardReplaceFunction,
 };
 pub use self::lex::LexErrorKind;
 pub use self::lhs_types::{Array, Bytes, Map, MapIter, TypedArray, TypedMap};

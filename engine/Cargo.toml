@@ -37,6 +37,7 @@ outer-regex.workspace = true
 rand.workspace = true
 regex-automata = { workspace = true, optional = true }
 serde.workspace = true
+serde_json.workspace = true
 simdutf8.workspace = true
 sliceslice.workspace = true
 thiserror.workspace = true
@@ -46,7 +47,6 @@ wildcard.workspace = true
 [dev-dependencies]
 criterion.workspace = true
 indoc.workspace = true
-serde_json.workspace = true
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 # By default, getrandom doesn't have any source of randomness on wasm32-unknown.
