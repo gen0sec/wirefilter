@@ -99,9 +99,10 @@ pub use self::functions::{
     AllFunction, AnyFunction, CIDRFunction, ConcatFunction, DecodeBase64Function, EndsWithFunction,
     FunctionArgInvalidConstantError, FunctionArgKind, FunctionArgKindMismatchError, FunctionArgs,
     FunctionDefinition, FunctionDefinitionContext, FunctionParam, FunctionParamError, LenFunction,
-    LowerFunction, RemoveBytesFunction, SimpleFunctionArgKind, SimpleFunctionDefinition,
-    SimpleFunctionImpl, SimpleFunctionOptParam, SimpleFunctionParam, StartsWithFunction,
-    SubstringFunction, UUID4Function, UrlDecodeFunction, WildcardReplaceFunction,
+    LowerFunction, RegexReplaceFunction, RemoveBytesFunction, SimpleFunctionArgKind,
+    SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionOptParam, SimpleFunctionParam,
+    StartsWithFunction, SubstringFunction, UUID4Function, UrlDecodeFunction,
+    WildcardReplaceFunction,
 };
 pub use self::lex::LexErrorKind;
 pub use self::lhs_types::{Array, Bytes, Map, MapIter, TypedArray, TypedMap};

@@ -17,9 +17,9 @@ use std::net::IpAddr;
 use std::ops::{Deref, DerefMut};
 use wirefilter::{
     AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, DecodeBase64Function,
-    GetType, LenFunction, LowerFunction, NeverList, RemoveBytesFunction, StartsWithFunction,
-    SubstringFunction, Type, UUID4Function, UrlDecodeFunction, WildcardReplaceFunction,
-    catch_panic,
+    GetType, LenFunction, LowerFunction, NeverList, RegexReplaceFunction, RemoveBytesFunction,
+    StartsWithFunction, SubstringFunction, Type, UUID4Function, UrlDecodeFunction,
+    WildcardReplaceFunction, catch_panic,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -379,6 +379,13 @@ pub extern "C" fn wirefilter_add_function_to_scheme(
             }
         },
         "remove_bytes" => match builder.add_function(name, RemoveBytesFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "regex_replace" => match builder.add_function(name, RegexReplaceFunction::default()) {
             Ok(_) => true,
             Err(err) => {
                 write_last_error!("{}", err);
