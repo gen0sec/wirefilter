@@ -96,14 +96,14 @@ pub use self::filter::{
     CompiledExpr, CompiledOneExpr, CompiledValueExpr, CompiledVecExpr, Filter, FilterValue,
 };
 pub use self::functions::{
-    AllFunction, AnyFunction, CIDRFunction, ConcatFunction, DecodeBase64Function, EndsWithFunction,
-    FunctionArgInvalidConstantError, FunctionArgKind, FunctionArgKindMismatchError, FunctionArgs,
-    FunctionDefinition, FunctionDefinitionContext, FunctionParam, FunctionParamError,
-    JsonLookupIntegerFunction, JsonLookupStringFunction, LenFunction, LowerFunction,
-    RegexReplaceFunction, RemoveBytesFunction, RemoveQueryArgsFunction, SimpleFunctionArgKind,
-    SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionOptParam, SimpleFunctionParam,
-    StartsWithFunction, SubstringFunction, ToStringFunction, UUID4Function, UpperFunction,
-    UrlDecodeFunction, WildcardReplaceFunction,
+    AllFunction, AnyFunction, CIDRFunction, CompiledFunction, ConcatFunction, DecodeBase64Function,
+    EndsWithFunction, FunctionArgInvalidConstantError, FunctionArgKind,
+    FunctionArgKindMismatchError, FunctionArgs, FunctionDefinition, FunctionDefinitionContext,
+    FunctionParam, FunctionParamError, JsonLookupIntegerFunction, JsonLookupStringFunction,
+    LenFunction, LowerFunction, RegexReplaceFunction, RemoveBytesFunction, RemoveQueryArgsFunction,
+    SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionOptParam,
+    SimpleFunctionParam, StartsWithFunction, SubstringFunction, ToStringFunction, UUID4Function,
+    UpperFunction, UrlDecodeFunction, WildcardReplaceFunction,
 };
 pub use self::lex::LexErrorKind;
 pub use self::lhs_types::{Array, Bytes, Map, MapIter, TypedArray, TypedMap};
