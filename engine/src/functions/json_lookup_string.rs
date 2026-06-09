@@ -1,9 +1,7 @@
-use std::iter;
-
+use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
 use crate::lhs_types::Bytes;
 use crate::{LhsValue, Type};
-
-use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
+use std::iter;
 
 /// Returns the string value associated with the supplied key in `field`.
 ///
@@ -144,7 +142,9 @@ mod tests {
         .into_iter();
         assert_eq!(
             json_lookup_string_impl(&mut args),
-            Some(LhsValue::Bytes(Bytes::Owned(b"cloudflare".to_vec().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"cloudflare".to_vec().into_boxed_slice()
+            )))
         );
     }
 
@@ -159,7 +159,9 @@ mod tests {
         .into_iter();
         assert_eq!(
             json_lookup_string_impl(&mut args),
-            Some(LhsValue::Bytes(Bytes::Owned(b"cloudflare".to_vec().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"cloudflare".to_vec().into_boxed_slice()
+            )))
         );
     }
 
@@ -173,7 +175,9 @@ mod tests {
         .into_iter();
         assert_eq!(
             json_lookup_string_impl(&mut args),
-            Some(LhsValue::Bytes(Bytes::Owned(b"cloudflare".to_vec().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"cloudflare".to_vec().into_boxed_slice()
+            )))
         );
     }
 
@@ -188,7 +192,9 @@ mod tests {
         .into_iter();
         assert_eq!(
             json_lookup_string_impl(&mut args),
-            Some(LhsValue::Bytes(Bytes::Owned(b"cloudflare".to_vec().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"cloudflare".to_vec().into_boxed_slice()
+            )))
         );
     }
 
@@ -203,7 +209,9 @@ mod tests {
         .into_iter();
         assert_eq!(
             json_lookup_string_impl(&mut args),
-            Some(LhsValue::Bytes(Bytes::Owned(b"cloudflare".to_vec().into_boxed_slice())))
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"cloudflare".to_vec().into_boxed_slice()
+            )))
         );
     }
 }
