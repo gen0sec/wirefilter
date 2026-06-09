@@ -1,15 +1,11 @@
-use super::{
-    Expr,
-    field_expr::ComparisonExpr,
-    parse::FilterParser,
-    visitor::{Visitor, VisitorMut},
-};
-use crate::{
-    compiler::Compiler,
-    filter::{CompiledExpr, CompiledOneExpr, CompiledVecExpr},
-    lex::{Lex, LexErrorKind, LexResult, LexWith, expect, skip_space},
-    types::{GetType, Type, TypeMismatchError},
-};
+use super::Expr;
+use super::field_expr::ComparisonExpr;
+use super::parse::FilterParser;
+use super::visitor::{Visitor, VisitorMut};
+use crate::compiler::Compiler;
+use crate::filter::{CompiledExpr, CompiledOneExpr, CompiledVecExpr};
+use crate::lex::{Lex, LexErrorKind, LexResult, LexWith, expect, skip_space};
+use crate::types::{GetType, Type, TypeMismatchError};
 use serde::Serialize;
 
 lex_enum!(
@@ -326,15 +322,13 @@ impl Expr for LogicalExpr {
 #[allow(clippy::cognitive_complexity)]
 fn test() {
     use super::field_expr::ComparisonExpr;
-    use crate::{
-        ast::field_expr::{ComparisonOpExpr, IdentifierExpr},
-        ast::index_expr::IndexExpr,
-        execution_context::ExecutionContext,
-        lex::complete,
-        lhs_types::Array,
-        scheme::FieldIndex,
-        types::Type,
-    };
+    use crate::ast::field_expr::{ComparisonOpExpr, IdentifierExpr};
+    use crate::ast::index_expr::IndexExpr;
+    use crate::execution_context::ExecutionContext;
+    use crate::lex::complete;
+    use crate::lhs_types::Array;
+    use crate::scheme::FieldIndex;
+    use crate::types::Type;
 
     let scheme = &Scheme! {
         t: Bool,

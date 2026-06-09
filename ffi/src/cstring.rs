@@ -1,8 +1,6 @@
-use std::{
-    fmt::{self, Debug},
-    io,
-    os::raw::c_char,
-};
+use std::fmt::{self, Debug};
+use std::io;
+use std::os::raw::c_char;
 
 /// Used for replacing null bytes in C strings that cannot contain null bytes.
 const SUBSTITUTE_BYTE: u8 = 0x1a;

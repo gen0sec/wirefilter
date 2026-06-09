@@ -1,12 +1,11 @@
 mod array;
+mod bytes;
 mod map;
 
+pub use self::array::{Array, ArrayIntoIter, ArrayIter, TypedArray};
+pub use self::bytes::Bytes;
+pub use self::map::{Map, MapIter, MapValuesIntoIter, TypedMap};
 use crate::types::LhsValue;
-
-pub use self::{
-    array::{Array, ArrayIterator, TypedArray},
-    map::{Map, MapIter, MapValuesIntoIter, TypedMap},
-};
 
 pub struct AsRefIterator<'a, T: Iterator<Item = &'a LhsValue<'a>>>(T);
 

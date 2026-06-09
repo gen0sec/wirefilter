@@ -1,14 +1,15 @@
-use crate::lhs_types::Bytes;
-use crate::{FunctionArgKind, FunctionArgs, FunctionDefinition, LhsValue, Type};
 use std::iter;
 
-/// Converts a string field to lowercase. Only uppercase ASCII bytes are converted. All other bytes are unaffected.
-/// For example, if http.host is "WWW.cloudflare.com", then lower(http.host) == "www.cloudflare.com" will return true.
+use crate::lhs_types::Bytes;
+use crate::{FunctionArgKind, FunctionArgs, FunctionDefinition, LhsValue, Type};
+
+/// Converts a string field to uppercase. Only lowercase ASCII bytes are converted. All other bytes are unaffected.
+/// For example, if http.host is "www.cloudflare.com", then upper(http.host) will return "WWW.CLOUDFLARE.COM".
 #[derive(Debug, Default)]
-pub struct LowerFunction {}
+pub struct UpperFunction {}
 
 #[inline]
-fn lower_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
+fn upper_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     let arg = args.next().expect("expected 1 argument, got 0");
 
     if args.next().is_some() {
@@ -17,18 +18,16 @@ fn lower_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
 
     match arg {
         Ok(LhsValue::Bytes(bytes)) => {
-            let bytes_lower: Vec<u8> = bytes.into_owned().to_vec();
-            let bytes_lower = bytes_lower.to_ascii_lowercase();
-            Some(LhsValue::Bytes(Bytes::Owned(
-                bytes_lower.into_boxed_slice(),
-            )))
+            let bytes_upper: Vec<u8> = bytes.into_owned().to_vec();
+            let bytes_upper = bytes_upper.to_ascii_uppercase();
+            Some(LhsValue::Bytes(Bytes::Owned(bytes_upper.into_boxed_slice())))
         }
         Err(Type::Bytes) => None,
         _ => unreachable!(),
     }
 }
 
-impl FunctionDefinition for LowerFunction {
+impl FunctionDefinition for UpperFunction {
     fn check_param(
         &self,
         _: &crate::ParserSettings,
@@ -65,7 +64,7 @@ impl FunctionDefinition for LowerFunction {
         _: Option<super::FunctionDefinitionContext>,
     ) -> Box<dyn for<'i, 'a> Fn(FunctionArgs<'i, 'a>) -> Option<LhsValue<'a>> + Sync + Send + 'static>
     {
-        Box::new(lower_impl)
+        Box::new(upper_impl)
     }
 }
 
@@ -74,64 +73,71 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_lower_fn() {
-        // Test with an all-uppercase string
-        let mut args_upper = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"HELLO WORLD")))].into_iter();
+    fn test_upper_fn() {
+        // Test with an all-lowercase string
+        let mut args_lower = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"hello world")))].into_iter();
         assert_eq!(
-            lower_impl(&mut args_upper),
-            Some(LhsValue::Bytes(Bytes::Owned(
-                b"hello world".to_vec().into_boxed_slice()
-            )))
+            upper_impl(&mut args_lower),
+            Some(LhsValue::Bytes(Bytes::Owned(b"HELLO WORLD".to_vec().into_boxed_slice())))
         );
 
         // Test with a mixed-case string
         let mut args_mixed = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"MiXeD CaSe")))].into_iter();
         assert_eq!(
-            lower_impl(&mut args_mixed),
-            Some(LhsValue::Bytes(Bytes::Owned(
-                b"mixed case".to_vec().into_boxed_slice()
-            )))
+            upper_impl(&mut args_mixed),
+            Some(LhsValue::Bytes(Bytes::Owned(b"MIXED CASE".to_vec().into_boxed_slice())))
         );
 
-        // Test with an already lowercase string
-        let mut args_lower =
-            vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"already lower")))].into_iter();
+        // Test with an already uppercase string
+        let mut args_upper = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"ALREADY UPPER")))].into_iter();
         assert_eq!(
-            lower_impl(&mut args_lower),
-            Some(LhsValue::Bytes(Bytes::Owned(
-                b"already lower".to_vec().into_boxed_slice()
-            )))
+            upper_impl(&mut args_upper),
+            Some(LhsValue::Bytes(Bytes::Owned(b"ALREADY UPPER".to_vec().into_boxed_slice())))
+        );
+
+        // Test with the example from the specification: "www.cloudflare.com"
+        let mut args_example =
+            vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"www.cloudflare.com")))].into_iter();
+        assert_eq!(
+            upper_impl(&mut args_example),
+            Some(LhsValue::Bytes(Bytes::Owned(b"WWW.CLOUDFLARE.COM".to_vec().into_boxed_slice())))
         );
 
         // Test with an empty string
         let mut args_empty = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"")))].into_iter();
         assert_eq!(
-            lower_impl(&mut args_empty),
-            Some(LhsValue::Bytes(Bytes::Owned(
-                b"".to_vec().into_boxed_slice()
-            )))
+            upper_impl(&mut args_empty),
+            Some(LhsValue::Bytes(Bytes::Owned(b"".to_vec().into_boxed_slice())))
         );
 
         // Test with missing field
         let mut args_missing = vec![Err(Type::Bytes)].into_iter();
-        assert_eq!(lower_impl(&mut args_missing), None);
+        assert_eq!(upper_impl(&mut args_missing), None);
+
+        // Test that only ASCII lowercase bytes are converted, other bytes are unaffected
+        let mut args_non_ascii =
+            vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"hello\xc3\xa9world")))].into_iter();
+        assert_eq!(
+            upper_impl(&mut args_non_ascii),
+            Some(LhsValue::Bytes(Bytes::Owned(b"HELLO\xc3\xa9WORLD".to_vec().into_boxed_slice())))
+        );
     }
 
     #[test]
     #[should_panic(expected = "expected 1 argument, got 0")]
-    fn test_lower_fn_no_args() {
+    fn test_upper_fn_no_args() {
         let mut args = vec![].into_iter();
-        lower_impl(&mut args);
+        upper_impl(&mut args);
     }
 
     #[test]
     #[should_panic(expected = "expected 1 argument, got 2")]
-    fn test_lower_fn_too_many_args() {
+    fn test_upper_fn_too_many_args() {
         let mut args = vec![
             Ok(LhsValue::Bytes(Bytes::Borrowed(b"a"))),
             Ok(LhsValue::Bytes(Bytes::Borrowed(b"b"))),
         ]
         .into_iter();
-        lower_impl(&mut args);
+        upper_impl(&mut args);
     }
 }

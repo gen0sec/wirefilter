@@ -1,10 +1,8 @@
-use super::{
-    Expr, ValueExpr,
-    field_expr::{ComparisonExpr, ComparisonOpExpr},
-    function_expr::{FunctionCallArgExpr, FunctionCallExpr},
-    index_expr::IndexExpr,
-    logical_expr::LogicalExpr,
-};
+use super::field_expr::{ComparisonExpr, ComparisonOpExpr};
+use super::function_expr::{FunctionCallArgExpr, FunctionCallExpr};
+use super::index_expr::IndexExpr;
+use super::logical_expr::LogicalExpr;
+use super::{Expr, ValueExpr};
 use crate::{Field, FieldRef, Function};
 
 /// Trait used to immutably visit all nodes in the AST.
@@ -219,7 +217,7 @@ impl Visitor<'_> for UsesListVisitor<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        AlwaysList, FunctionArgKind, Scheme, SimpleFunctionDefinition, SimpleFunctionImpl,
+        AlwaysList, Scheme, SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl,
         SimpleFunctionParam, Type,
     };
     use std::sync::LazyLock;
@@ -239,7 +237,7 @@ mod tests {
                 "echo",
                 SimpleFunctionDefinition {
                     params: vec![SimpleFunctionParam {
-                        arg_kind: FunctionArgKind::Field,
+                        arg_kind: SimpleFunctionArgKind::Field,
                         val_type: Type::Bytes,
                     }],
                     opt_params: vec![],

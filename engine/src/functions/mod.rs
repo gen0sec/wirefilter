@@ -2,30 +2,41 @@ pub(crate) mod all;
 pub(crate) mod any;
 pub(crate) mod cidr;
 pub(crate) mod concat;
+pub(crate) mod decode_base64;
+pub(crate) mod ends_with;
 pub(crate) mod len;
 pub(crate) mod lower;
 pub(crate) mod regex_replace;
+pub(crate) mod remove_bytes;
 pub(crate) mod starts_with;
+pub(crate) mod substring;
+pub(crate) mod url_decode;
+pub(crate) mod uuid4;
 pub(crate) mod wildcard_replace;
 
-use crate::{
-    ParserSettings,
-    filter::CompiledValueResult,
-    types::{ExpectedType, ExpectedTypeList, GetType, LhsValue, RhsValue, Type, TypeMismatchError},
+use crate::ParserSettings;
+use crate::filter::CompiledValueResult;
+use crate::types::{
+    ExpectedType, ExpectedTypeList, GetType, LhsValue, RhsValue, Type, TypeMismatchError,
 };
 pub use all::AllFunction;
 pub use any::AnyFunction;
 pub use cidr::CIDRFunction;
 pub use concat::ConcatFunction;
+pub use decode_base64::DecodeBase64Function;
+pub use ends_with::EndsWithFunction;
 pub use len::LenFunction;
 pub use lower::LowerFunction;
 pub use regex_replace::RegexReplaceFunction;
+pub use remove_bytes::RemoveBytesFunction;
 pub use starts_with::StartsWithFunction;
 use std::any::Any;
-use std::convert::TryFrom;
 use std::fmt::{self, Debug};
 use std::iter::once;
+pub use substring::SubstringFunction;
 use thiserror::Error;
+pub use url_decode::UrlDecodeFunction;
+pub use uuid4::UUID4Function;
 pub use wildcard_replace::WildcardReplaceFunction;
 
 pub(crate) struct ExactSizeChain<A, B>
@@ -100,6 +111,23 @@ pub enum FunctionArgKind {
     Literal,
     /// Allow only field as argument.
     Field,
+}
+
+impl FunctionArgKind {
+    /// Check if the current argument kind matches the expected one.
+    pub fn expect(
+        &self,
+        expected_arg_kind: FunctionArgKind,
+    ) -> Result<(), FunctionArgKindMismatchError> {
+        if self == &expected_arg_kind {
+            Ok(())
+        } else {
+            Err(FunctionArgKindMismatchError {
+                expected: expected_arg_kind,
+                actual: *self,
+            })
+        }
+    }
 }
 
 /// An error that occurs on a kind mismatch.
@@ -179,11 +207,8 @@ pub enum FunctionParam<'a> {
 }
 
 impl From<&FunctionParam<'_>> for FunctionArgKind {
-    fn from(arg: &FunctionParam<'_>) -> Self {
-        match arg {
-            FunctionParam::Constant(_) => FunctionArgKind::Literal,
-            FunctionParam::Variable(_) => FunctionArgKind::Field,
-        }
+    fn from(param: &FunctionParam<'_>) -> Self {
+        param.arg_kind()
     }
 }
 
@@ -219,21 +244,11 @@ impl<'a> FunctionParam<'a> {
         }
     }
 
-    /// Check if the arg_kind of current paramater matches the expected_arg_kind
-    pub fn expect_arg_kind(
-        &self,
-        expected_arg_kind: FunctionArgKind,
-    ) -> Result<(), FunctionParamError> {
-        let kind = self.into();
-        if kind == expected_arg_kind {
-            Ok(())
-        } else {
-            Err(FunctionParamError::KindMismatch(
-                FunctionArgKindMismatchError {
-                    expected: expected_arg_kind,
-                    actual: kind,
-                },
-            ))
+    /// Returns the associated argument kind.
+    pub fn arg_kind(&self) -> FunctionArgKind {
+        match self {
+            FunctionParam::Constant(_) => FunctionArgKind::Literal,
+            FunctionParam::Variable(_) => FunctionArgKind::Field,
         }
     }
 
@@ -415,7 +430,7 @@ pub trait FunctionDefinition: Debug + Send + Sync {
     ) -> Box<dyn for<'i, 'a> Fn(FunctionArgs<'i, 'a>) -> Option<LhsValue<'a>> + Sync + Send + 'static>;
 }
 
-/* Simple function APIs */
+// Simple function APIs
 
 type FunctionPtr = for<'i, 'a> fn(FunctionArgs<'i, 'a>) -> Option<LhsValue<'a>>;
 
@@ -446,11 +461,32 @@ impl PartialEq for SimpleFunctionImpl {
 
 impl Eq for SimpleFunctionImpl {}
 
+/// Kind of argument the function parameter expects.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum SimpleFunctionArgKind {
+    /// The parameter is expecting a literal value.
+    Literal,
+    /// The parameter is expecting a field / dynamic value.
+    Field,
+    /// The parameter is expecting either a literal or a field / dynamic value.
+    Both,
+}
+
+impl SimpleFunctionArgKind {
+    fn expect(&self, arg_kind: FunctionArgKind) -> Result<(), FunctionArgKindMismatchError> {
+        match self {
+            SimpleFunctionArgKind::Literal => arg_kind.expect(FunctionArgKind::Literal),
+            SimpleFunctionArgKind::Field => arg_kind.expect(FunctionArgKind::Field),
+            SimpleFunctionArgKind::Both => Ok(()),
+        }
+    }
+}
+
 /// Defines a mandatory function argument.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SimpleFunctionParam {
     /// How the argument can be specified when calling a function.
-    pub arg_kind: FunctionArgKind,
+    pub arg_kind: SimpleFunctionArgKind,
     /// The type of its associated value.
     pub val_type: Type,
 }
@@ -459,7 +495,7 @@ pub struct SimpleFunctionParam {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SimpleFunctionOptParam {
     /// How the argument can be specified when calling a function.
-    pub arg_kind: FunctionArgKind,
+    pub arg_kind: SimpleFunctionArgKind,
     /// The default value if the argument is missing.
     pub default_value: LhsValue<'static>,
 }
@@ -488,11 +524,11 @@ impl FunctionDefinition for SimpleFunctionDefinition {
         let index = params.len();
         if index < self.params.len() {
             let param = &self.params[index];
-            next_param.expect_arg_kind(param.arg_kind)?;
+            param.arg_kind.expect(next_param.arg_kind())?;
             next_param.expect_val_type(once(ExpectedType::Type(param.val_type)))?;
         } else if index < self.params.len() + self.opt_params.len() {
             let opt_param = &self.opt_params[index - self.params.len()];
-            next_param.expect_arg_kind(opt_param.arg_kind)?;
+            opt_param.arg_kind.expect(next_param.arg_kind())?;
             next_param
                 .expect_val_type(once(ExpectedType::Type(opt_param.default_value.get_type())))?;
         } else {

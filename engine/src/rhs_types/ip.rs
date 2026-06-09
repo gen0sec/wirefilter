@@ -1,17 +1,13 @@
+use crate::lex::{Lex, LexError, LexErrorKind, LexResult, take_while};
+use crate::strict_partial_ord::StrictPartialOrd;
 pub use cidr::IpCidr;
-
-use crate::{
-    lex::{Lex, LexError, LexErrorKind, LexResult, take_while},
-    strict_partial_ord::StrictPartialOrd,
-};
-use cidr::{Ipv4Cidr, Ipv6Cidr, errors::NetworkParseError};
+use cidr::errors::NetworkParseError;
+use cidr::{Ipv4Cidr, Ipv6Cidr};
 use serde::Serialize;
-use std::{
-    cmp::Ordering,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    ops::RangeInclusive,
-    str::FromStr,
-};
+use std::cmp::Ordering;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::ops::RangeInclusive;
+use std::str::FromStr;
 
 fn match_addr_or_cidr(input: &str) -> LexResult<'_, &str> {
     take_while(

@@ -1,20 +1,15 @@
-use crate::{
-    lhs_types::AsRefIterator,
-    types::{CompoundType, GetType, IntoValue, LhsValue, LhsValueSeed, Type, TypeMismatchError},
+use super::TypedMap;
+use super::map::InnerMap;
+use crate::lhs_types::AsRefIterator;
+use crate::types::{
+    CompoundType, GetType, IntoValue, LhsValue, LhsValueSeed, Type, TypeMismatchError,
 };
-use serde::{
-    Serialize, Serializer,
-    de::{self, DeserializeSeed, Deserializer, SeqAccess, Visitor},
-    ser::SerializeSeq,
-};
-use std::{
-    fmt,
-    hash::{Hash, Hasher},
-    hint::unreachable_unchecked,
-    ops::Deref,
-};
-
-use super::{TypedMap, map::InnerMap};
+use serde::de::{self, DeserializeSeed, Deserializer, SeqAccess, Visitor};
+use serde::ser::SerializeSeq;
+use serde::{Serialize, Serializer};
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::hint::unreachable_unchecked;
 
 // Ideally, we would want to use Cow<'a, LhsValue<'a>> here
 // but it doesnt work for unknown reasons
@@ -32,48 +27,34 @@ impl<'a> InnerArray<'a> {
     }
 
     #[inline]
-    fn as_vec(&mut self) -> &mut Vec<LhsValue<'a>> {
+    fn len(&self) -> usize {
         match self {
-            InnerArray::Owned(vec) => vec,
-            InnerArray::Borrowed(slice) => {
-                *self = InnerArray::Owned(slice.to_vec());
-                match self {
-                    InnerArray::Owned(vec) => vec,
-                    _ => unsafe { unreachable_unchecked() },
-                }
-            }
+            InnerArray::Owned(vec) => vec.len(),
+            InnerArray::Borrowed(slice) => slice.len(),
         }
     }
 
     #[inline]
-    fn get_mut(&mut self, idx: usize) -> Option<&mut LhsValue<'a>> {
-        self.as_vec().get_mut(idx)
-    }
-
-    #[inline]
-    fn push(&mut self, value: LhsValue<'a>) {
-        self.as_vec().push(value)
-    }
-
-    #[inline]
-    fn truncate(&mut self, len: usize) {
+    fn is_empty(&self) -> bool {
         match self {
-            InnerArray::Owned(vec) => vec.truncate(len),
-            InnerArray::Borrowed(slice) => {
-                *slice = &slice[..len];
-            }
+            InnerArray::Owned(vec) => vec.is_empty(),
+            InnerArray::Borrowed(slice) => slice.is_empty(),
         }
     }
-}
-
-impl<'a> Deref for InnerArray<'a> {
-    type Target = [LhsValue<'a>];
 
     #[inline]
-    fn deref(&self) -> &Self::Target {
+    fn get(&self, idx: usize) -> Option<&LhsValue<'a>> {
         match self {
-            InnerArray::Owned(vec) => &vec[..],
-            InnerArray::Borrowed(slice) => slice,
+            Self::Owned(vec) => vec.get(idx),
+            Self::Borrowed(slice) => slice.get(idx),
+        }
+    }
+
+    #[inline]
+    fn iter(&self) -> std::slice::Iter<'_, LhsValue<'a>> {
+        match self {
+            Self::Owned(vec) => vec.iter(),
+            Self::Borrowed(slice) => slice.iter(),
         }
     }
 }
@@ -81,6 +62,15 @@ impl<'a> Deref for InnerArray<'a> {
 impl Default for InnerArray<'_> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Hash for InnerArray<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            InnerArray::Owned(vec) => vec.as_slice().hash(state),
+            InnerArray::Borrowed(slice) => slice.hash(state),
+        }
     }
 }
 
@@ -148,6 +138,12 @@ impl<'a> Array<'a> {
         self.data.is_empty()
     }
 
+    /// Returns an iterator over the elements in array.
+    #[inline]
+    pub fn iter(&self) -> ArrayIter<'a, '_> {
+        ArrayIter(self.data.iter())
+    }
+
     pub(crate) fn extract(self, idx: usize) -> Option<LhsValue<'a>> {
         let Self { data, .. } = self;
         if idx >= data.len() {
@@ -160,16 +156,15 @@ impl<'a> Array<'a> {
         }
     }
 
-    pub(crate) fn as_slice(&self) -> &[LhsValue<'a>] {
-        &self.data
-    }
-
     pub(crate) fn filter_map_to<F>(self, value_type: impl Into<CompoundType>, func: F) -> Self
     where
         F: Fn(LhsValue<'a>) -> Option<LhsValue<'a>>,
     {
-        let Self { mut data, .. } = self;
-        let mut vec = std::mem::take(data.as_vec());
+        let Self { data, .. } = self;
+        let mut vec = match data {
+            InnerArray::Owned(vec) => vec,
+            InnerArray::Borrowed(slice) => slice.to_vec(),
+        };
         let val_type = value_type.into();
         let mut write = 0;
         for read in 0..vec.len() {
@@ -247,7 +242,21 @@ impl<'a> Array<'a> {
 impl<'a> PartialEq for Array<'a> {
     #[inline]
     fn eq(&self, other: &Array<'a>) -> bool {
-        self.val_type == other.val_type && self.data.deref() == other.data.deref()
+        if self.val_type != other.val_type {
+            return false;
+        }
+
+        if self.data.len() != other.data.len() {
+            return false;
+        }
+
+        for (v1, v2) in self.data.iter().zip(other.data.iter()) {
+            if v1 != v2 {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -262,7 +271,7 @@ impl GetType for Array<'_> {
 impl Hash for Array<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.get_type().hash(state);
-        self.data.deref().hash(state);
+        self.data.hash(state);
     }
 }
 
@@ -279,18 +288,18 @@ impl<'a, V: IntoValue<'a>> FromIterator<V> for Array<'a> {
     }
 }
 
-pub enum ArrayIterator<'a> {
+pub enum ArrayIntoIter<'a> {
     Owned(std::vec::IntoIter<LhsValue<'a>>),
     Borrowed(AsRefIterator<'a, std::slice::Iter<'a, LhsValue<'a>>>),
 }
 
-impl<'a> Iterator for ArrayIterator<'a> {
+impl<'a> Iterator for ArrayIntoIter<'a> {
     type Item = LhsValue<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            ArrayIterator::Owned(vec_iter) => vec_iter.next(),
-            ArrayIterator::Borrowed(slice_iter) => slice_iter.next(),
+            ArrayIntoIter::Owned(vec_iter) => vec_iter.next(),
+            ArrayIntoIter::Borrowed(slice_iter) => slice_iter.next(),
         }
     }
 
@@ -299,31 +308,57 @@ impl<'a> Iterator for ArrayIterator<'a> {
     }
 }
 
-impl ExactSizeIterator for ArrayIterator<'_> {
+impl ExactSizeIterator for ArrayIntoIter<'_> {
     fn len(&self) -> usize {
         match self {
-            ArrayIterator::Owned(vec_iter) => vec_iter.len(),
-            ArrayIterator::Borrowed(slice_iter) => slice_iter.len(),
+            ArrayIntoIter::Owned(vec_iter) => vec_iter.len(),
+            ArrayIntoIter::Borrowed(slice_iter) => slice_iter.len(),
         }
     }
 }
 
 impl<'a> IntoIterator for Array<'a> {
+    type IntoIter = ArrayIntoIter<'a>;
     type Item = LhsValue<'a>;
-    type IntoIter = ArrayIterator<'a>;
+
     fn into_iter(self) -> Self::IntoIter {
         match self.data {
-            InnerArray::Owned(vec) => ArrayIterator::Owned(vec.into_iter()),
-            InnerArray::Borrowed(slice) => ArrayIterator::Borrowed(AsRefIterator(slice.iter())),
+            InnerArray::Owned(vec) => ArrayIntoIter::Owned(vec.into_iter()),
+            InnerArray::Borrowed(slice) => ArrayIntoIter::Borrowed(AsRefIterator(slice.iter())),
         }
     }
 }
 
-impl<'a, 'b> IntoIterator for &'b Array<'a> {
+pub struct ArrayIter<'a, 'b>(std::slice::Iter<'b, LhsValue<'a>>);
+
+impl<'a, 'b> Iterator for ArrayIter<'a, 'b> {
     type Item = &'b LhsValue<'a>;
-    type IntoIter = std::slice::Iter<'b, LhsValue<'a>>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+
+impl ExactSizeIterator for ArrayIter<'_, '_> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl<'a, 'b> IntoIterator for &'b Array<'a> {
+    type IntoIter = ArrayIter<'a, 'b>;
+    type Item = &'b LhsValue<'a>;
+
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        self.data.iter()
+        self.iter()
     }
 }
 
@@ -361,7 +396,10 @@ impl<'de> DeserializeSeed<'de> for &mut Array<'de> {
                 A: SeqAccess<'de>,
             {
                 let value_type = self.0.value_type();
-                let vec = self.0.data.as_vec();
+                let mut vec = match &mut self.0.data {
+                    InnerArray::Owned(vec) => std::mem::take(vec),
+                    InnerArray::Borrowed(slice) => slice.to_vec(),
+                };
                 while let Some(elem) = seq.next_element_seed(LhsValueSeed(&value_type))? {
                     let elem_type = elem.get_type();
                     if value_type != elem_type {
@@ -371,6 +409,7 @@ impl<'de> DeserializeSeed<'de> for &mut Array<'de> {
                     }
                     vec.push(elem);
                 }
+                self.0.data = InnerArray::Owned(vec);
                 Ok(())
             }
         }
@@ -396,16 +435,32 @@ impl<'a, V: IntoValue<'a>> TypedArray<'a, V> {
     pub const fn new() -> Self {
         const {
             Self {
-                array: InnerArray::new(),
+                array: InnerArray::Owned(Vec::new()),
                 _marker: std::marker::PhantomData,
             }
+        }
+    }
+
+    #[inline]
+    fn as_vec_ref(&self) -> &Vec<LhsValue<'a>> {
+        match &self.array {
+            InnerArray::Owned(vec) => vec,
+            InnerArray::Borrowed(_) => unreachable!(),
+        }
+    }
+
+    #[inline]
+    fn as_vec_mut(&mut self) -> &mut Vec<LhsValue<'a>> {
+        match &mut self.array {
+            InnerArray::Owned(vec) => vec,
+            InnerArray::Borrowed(_) => unreachable!(),
         }
     }
 
     /// Push an element to the back of the array
     #[inline]
     pub fn push(&mut self, value: V) {
-        self.array.push(value.into_value())
+        self.as_vec_mut().push(value.into_value())
     }
 
     /// Returns the number of elements in the array
@@ -423,14 +478,14 @@ impl<'a, V: IntoValue<'a>> TypedArray<'a, V> {
     /// Shortens the array, keeping the first `len` elements and dropping the rest.
     #[inline]
     pub fn truncate(&mut self, len: usize) {
-        self.array.truncate(len);
+        self.as_vec_mut().truncate(len);
     }
 
     /// Converts the strongly typed array into a borrowed loosely typed array.
     pub fn as_array(&'a self) -> Array<'a> {
         Array {
             val_type: V::TYPE.into(),
-            data: InnerArray::Borrowed(self.array.deref()),
+            data: InnerArray::Borrowed(self.as_vec_ref()),
         }
     }
 }
@@ -438,7 +493,7 @@ impl<'a, V: IntoValue<'a>> TypedArray<'a, V> {
 impl TypedArray<'static, bool> {
     #[inline]
     pub(crate) fn iter(&self) -> impl ExactSizeIterator<Item = &bool> + '_ {
-        self.array.iter().map(|value| match value {
+        self.as_vec_ref().iter().map(|value| match value {
             LhsValue::Bool(b) => b,
             _ => unsafe { unreachable_unchecked() },
         })
@@ -446,7 +501,7 @@ impl TypedArray<'static, bool> {
 
     #[inline]
     pub(crate) fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = &mut bool> + '_ {
-        self.array.as_vec().iter_mut().map(|value| match value {
+        self.as_vec_mut().iter_mut().map(|value| match value {
             LhsValue::Bool(b) => b,
             _ => unsafe { unreachable_unchecked() },
         })
@@ -461,7 +516,7 @@ impl<'a, V: IntoValue<'a>> fmt::Debug for TypedArray<'a, V> {
 
 impl<'a, V: IntoValue<'a>> PartialEq for TypedArray<'a, V> {
     fn eq(&self, other: &Self) -> bool {
-        self.array.deref() == other.array.deref()
+        self.as_vec_ref() == other.as_vec_ref()
     }
 }
 
@@ -496,8 +551,7 @@ impl<'a, V: IntoValue<'a>> Default for TypedArray<'a, V> {
 impl<'a, V: IntoValue<'a>> Extend<V> for TypedArray<'a, V> {
     #[inline]
     fn extend<T: IntoIterator<Item = V>>(&mut self, iter: T) {
-        self.array
-            .as_vec()
+        self.as_vec_mut()
             .extend(iter.into_iter().map(IntoValue::into_value))
     }
 }
@@ -526,7 +580,7 @@ impl<'a, V: IntoValue<'a>> IntoValue<'a> for TypedArray<'a, V> {
 impl<'a, V: IntoValue<'a>> TypedArray<'a, TypedArray<'a, V>> {
     /// Returns a reference to an element or None if the index is out of bounds.
     pub fn get(&self, index: usize) -> Option<&TypedArray<'a, V>> {
-        self.array.get(index).map(|val| match val {
+        self.as_vec_ref().get(index).map(|val| match val {
             LhsValue::Array(array) => {
                 // Safety: this is safe because `TypedArray` is a repr(transparent)
                 // newtype over `InnerArray`.
@@ -538,7 +592,7 @@ impl<'a, V: IntoValue<'a>> TypedArray<'a, TypedArray<'a, V>> {
 
     /// Returns a mutable reference to an element or None if the index is out of bounds.
     pub fn get_mut(&mut self, index: usize) -> Option<&mut TypedArray<'a, V>> {
-        self.array.get_mut(index).map(|val| match val {
+        self.as_vec_mut().get_mut(index).map(|val| match val {
             LhsValue::Array(array) => {
                 // Safety: this is safe because `TypedArray` is a repr(transparent)
                 // newtype over `InnerArray`.
@@ -556,7 +610,7 @@ impl<'a, V: IntoValue<'a>> TypedArray<'a, TypedArray<'a, V>> {
 impl<'a, V: IntoValue<'a>> TypedArray<'a, TypedMap<'a, V>> {
     /// Returns a reference to an element or None if the index is out of bounds.
     pub fn get(&self, index: usize) -> Option<&TypedMap<'a, V>> {
-        self.array.get(index).map(|val| match val {
+        self.as_vec_ref().get(index).map(|val| match val {
             LhsValue::Map(map) => {
                 // Safety: this is safe because `TypedMap` is a repr(transparent)
                 // newtype over `InnerMap`.
@@ -568,7 +622,7 @@ impl<'a, V: IntoValue<'a>> TypedArray<'a, TypedMap<'a, V>> {
 
     /// Returns a mutable reference to an element or None if the index is out of bounds.
     pub fn get_mut(&mut self, index: usize) -> Option<&mut TypedMap<'a, V>> {
-        self.array.get_mut(index).map(|val| match val {
+        self.as_vec_mut().get_mut(index).map(|val| match val {
             LhsValue::Map(map) => {
                 // Safety: this is safe because `TypedMap` is a repr(transparent)
                 // newtype over `InnerMap`.

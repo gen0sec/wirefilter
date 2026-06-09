@@ -5,12 +5,10 @@
 //! their `execute` methods and aggregating results into a single boolean value
 //! as recursion unwinds.
 
-use crate::{
-    execution_context::ExecutionContext,
-    lhs_types::TypedArray,
-    scheme::{Scheme, SchemeMismatchError},
-    types::{LhsValue, Type},
-};
+use crate::execution_context::ExecutionContext;
+use crate::lhs_types::TypedArray;
+use crate::scheme::{Scheme, SchemeMismatchError};
+use crate::types::{LhsValue, Type};
 use std::fmt;
 
 type BoxedClosureToOneBool<U> =

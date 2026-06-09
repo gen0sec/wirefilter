@@ -10,16 +10,16 @@ use libc::c_char;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::de::DeserializeSeed;
 use std::cell::RefCell;
+use std::convert::TryFrom;
+use std::hash::Hasher;
+use std::io::{self, Write};
+use std::net::IpAddr;
 use std::ops::{Deref, DerefMut};
-use std::{
-    convert::TryFrom,
-    hash::Hasher,
-    io::{self, Write},
-    net::IpAddr,
-};
 use wirefilter::{
-    AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, GetType, LenFunction,
-    LowerFunction, NeverList, StartsWithFunction, Type, WildcardReplaceFunction, catch_panic,
+    AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, DecodeBase64Function,
+    GetType, LenFunction, LowerFunction, NeverList, RegexReplaceFunction, RemoveBytesFunction,
+    StartsWithFunction, SubstringFunction, Type, UUID4Function, UrlDecodeFunction,
+    WildcardReplaceFunction, catch_panic,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -175,7 +175,7 @@ macro_rules! wrap_type {
     };
 }
 
-/* Wrapper types needed by cbindgen to forward declare opaque structs */
+// Wrapper types needed by cbindgen to forward declare opaque structs
 
 #[derive(Debug, Default)]
 #[repr(Rust)]
@@ -306,85 +306,111 @@ pub extern "C" fn wirefilter_add_function_to_scheme(
     let name = to_str!(name_ptr, name_len);
 
     match name {
-        "concat" => {
-            return match builder.add_function(name, ConcatFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "any" => {
-            return match builder.add_function(name, AnyFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "all" => {
-            return match builder.add_function(name, AllFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "lower" => {
-            return match builder.add_function(name, LowerFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "starts_with" => {
-            return match builder.add_function(name, StartsWithFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "cidr" => {
-            return match builder.add_function(name, CIDRFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
-        "len" => {
-            return match builder.add_function(name, LenFunction::default()) {
-                Ok(_) => true,
-                Err(err) => {
-                    write_last_error!("{}", err);
-                    false
-                }
-            };
-        }
+        "concat" => match builder.add_function(name, ConcatFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "any" => match builder.add_function(name, AnyFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "all" => match builder.add_function(name, AllFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "lower" => match builder.add_function(name, LowerFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "starts_with" => match builder.add_function(name, StartsWithFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "cidr" => match builder.add_function(name, CIDRFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "len" => match builder.add_function(name, LenFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
         "wildcard_replace" => {
-            return match builder.add_function(name, WildcardReplaceFunction::default()) {
+            match builder.add_function(name, WildcardReplaceFunction::default()) {
                 Ok(_) => true,
                 Err(err) => {
                     write_last_error!("{}", err);
                     false
                 }
-            };
+            }
         }
+        "url_decode" => match builder.add_function(name, UrlDecodeFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "decode_base64" => match builder.add_function(name, DecodeBase64Function::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "remove_bytes" => match builder.add_function(name, RemoveBytesFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "regex_replace" => match builder.add_function(name, RegexReplaceFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "substring" => match builder.add_function(name, SubstringFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "uuid4" => match builder.add_function(name, UUID4Function::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
         _ => {
             write_last_error!("Unknown function name provided: {}", name);
-            return false;
+            false
         }
-    };
-
-    // Call the original Rust method. This should now compile correctly.
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -768,9 +794,8 @@ pub struct MatchingResult {
 }
 
 impl MatchingResult {
-    #[cfg(test)]
-    const MISSED: Self = Self {
-        status: Status::Success,
+    const ERROR: Self = Self {
+        status: Status::Error,
         matched: false,
     };
     #[cfg(test)]
@@ -778,8 +803,9 @@ impl MatchingResult {
         status: Status::Success,
         matched: true,
     };
-    const ERROR: Self = Self {
-        status: Status::Error,
+    #[cfg(test)]
+    const MISSED: Self = Self {
+        status: Status::Success,
         matched: false,
     };
     const PANIC: Self = Self {
@@ -824,6 +850,14 @@ pub struct UsingResult {
 }
 
 impl UsingResult {
+    const ERROR: Self = Self {
+        status: Status::Error,
+        used: false,
+    };
+    const PANIC: Self = Self {
+        status: Status::Error,
+        used: false,
+    };
     #[cfg(test)]
     const UNUSED: Self = Self {
         status: Status::Success,
@@ -833,14 +867,6 @@ impl UsingResult {
     const USED: Self = Self {
         status: Status::Success,
         used: true,
-    };
-    const ERROR: Self = Self {
-        status: Status::Error,
-        used: false,
-    };
-    const PANIC: Self = Self {
-        status: Status::Error,
-        used: false,
     };
 }
 

@@ -1,4 +1,7 @@
-use std::{borrow::Borrow, cmp::Ordering, iter::FromIterator, ops::RangeInclusive};
+use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::iter::FromIterator;
+use std::ops::RangeInclusive;
 
 /// RangeSet provides a set-like interface that allows to search for items while
 /// being constructed from and storing inclusive ranges in a compact fashion.

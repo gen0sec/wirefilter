@@ -1,8 +1,6 @@
 use super::{FilterAst, FilterValueAst};
-use crate::{
-    lex::{LexErrorKind, LexResult, LexWith, complete},
-    scheme::Scheme,
-};
+use crate::lex::{LexErrorKind, LexResult, LexWith, complete};
+use crate::scheme::Scheme;
 use std::cmp::{max, min};
 use std::error::Error;
 use std::fmt::{self, Debug, Display, Formatter};

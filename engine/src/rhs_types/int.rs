@@ -1,7 +1,5 @@
-use crate::{
-    lex::{Lex, LexErrorKind, LexResult, expect, span, take_while},
-    strict_partial_ord::StrictPartialOrd,
-};
+use crate::lex::{Lex, LexErrorKind, LexResult, expect, span, take_while};
+use crate::strict_partial_ord::StrictPartialOrd;
 use serde::Serialize;
 use std::ops::RangeInclusive;
 

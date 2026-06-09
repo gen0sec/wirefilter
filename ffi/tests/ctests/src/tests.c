@@ -515,7 +515,7 @@ void wirefilter_ffi_ctest_execution_context_serialize()
     struct wirefilter_rust_allocated_str json = serializing_result.json;
     rust_assert(json.ptr != NULL && json.len > 0, "could not serialize execution context to JSON");
 
-    const char *expected = "{\"http.host\":\"www.cloudflare.com\",\"ip.src\":\"192.168.0.1\",\"ip.dst\":\"2606:4700:4700::1111\",\"ssl\":false,\"tcp.port\":80,\"$lists\":[]}";
+    const char *expected = "{\"http.host\":\"www.cloudflare.com\",\"ip.src\":\"192.168.0.1\",\"ip.dst\":\"2606:4700:4700::1111\",\"ssl\":false,\"tcp.port\":80,\"$lists\":[{\"type\":\"Ip\",\"data\":{}}]}";
 
     rust_assert(json.len == strlen(expected), "invalid JSON serialization");
 
@@ -551,8 +551,9 @@ void wirefilter_ffi_ctest_execution_context_deserialize()
     rust_assert(json.ptr != NULL && json.len > 0, "could not serialize execution context to JSON");
 
     rust_assert(
-        strncmp(json.ptr, "{\"http.host\":\"www.cloudflare.com\",\"$lists\":[]}", json.len) == 0,
-        "invalid JSON serialization");
+        strncmp(json.ptr, "{\"http.host\":\"www.cloudflare.com\",\"$lists\":[{\"type\":\"Ip\",\"data\":{}}]}", json.len) == 0,
+        "invalid JSON serialization"
+    );
 
     struct wirefilter_execution_context *conv_exec_ctx = wirefilter_create_execution_context(scheme);
     rust_assert(conv_exec_ctx != NULL, "could not create execution context");
@@ -568,8 +569,9 @@ void wirefilter_ffi_ctest_execution_context_deserialize()
     rust_assert(conv_json.ptr != NULL && conv_json.len > 0, "could not serialize execution context to JSON");
 
     rust_assert(
-        strncmp(conv_json.ptr, "{\"http.host\":\"www.cloudflare.com\",\"$lists\":[]}", conv_json.len) == 0,
-        "invalid JSON serialization");
+        strncmp(conv_json.ptr, "{\"http.host\":\"www.cloudflare.com\",\"$lists\":[{\"type\":\"Ip\",\"data\":{}}]}", conv_json.len) == 0,
+        "invalid JSON serialization"
+    );
 
     wirefilter_free_string(conv_json);
 

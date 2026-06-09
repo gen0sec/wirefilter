@@ -2,13 +2,13 @@ use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
 use crate::{LhsValue, Type};
 use std::iter;
 
-/// Returns `true` when the source starts with a given substring. Returns `false` otherwise. The source cannot be a literal value (like `"foo"`).
-/// For example, if `http.request.uri.path` is `"/blog/first-post"`, then `starts_with(http.request.uri.path, "/blog")` will return `true`.
+/// Returns `true` when the source ends with a given substring. Returns `false` otherwise. The source cannot be a literal value (like `"foo"`).
+/// For example, if `http.request.uri.path` is `"/welcome.html"`, then `ends_with(http.request.uri.path, ".html")` will return `true`.
 #[derive(Default, Debug)]
-pub struct StartsWithFunction {}
+pub struct EndsWithFunction {}
 
 #[inline]
-fn starts_with_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
+fn ends_with_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     let source_arg = args.next().expect("expected 2 argument, got 0");
     let substring_arg = args.next().expect("expected 2 arguments, got 1");
 
@@ -18,7 +18,7 @@ fn starts_with_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
 
     match (source_arg, substring_arg) {
         (Ok(LhsValue::Bytes(source_bytes)), Ok(LhsValue::Bytes(substring_bytes))) => {
-            let res = source_bytes.as_ref().starts_with(substring_bytes.as_ref());
+            let res = source_bytes.as_ref().ends_with(substring_bytes.as_ref());
             Some(LhsValue::Bool(res))
         }
         (Err(Type::Bytes), _) => None,
@@ -27,7 +27,7 @@ fn starts_with_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     }
 }
 
-impl FunctionDefinition for StartsWithFunction {
+impl FunctionDefinition for EndsWithFunction {
     fn check_param(
         &self,
         _: &crate::ParserSettings,
@@ -37,12 +37,10 @@ impl FunctionDefinition for StartsWithFunction {
     ) -> Result<(), super::FunctionParamError> {
         match params.len() {
             0 => {
-                // first arg
                 next_param.arg_kind().expect(FunctionArgKind::Field)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
             1 => {
-                // second arg
                 next_param.arg_kind().expect(FunctionArgKind::Literal)?;
                 next_param.expect_val_type(iter::once(Type::Bytes.into()))?;
             }
@@ -70,7 +68,7 @@ impl FunctionDefinition for StartsWithFunction {
         _: Option<super::FunctionDefinitionContext>,
     ) -> Box<dyn for<'i, 'a> Fn(FunctionArgs<'i, 'a>) -> Option<LhsValue<'a>> + Sync + Send + 'static>
     {
-        Box::new(starts_with_impl)
+        Box::new(ends_with_impl)
     }
 }
 
@@ -80,23 +78,20 @@ mod tests {
     use crate::lhs_types::Bytes;
 
     #[test]
-    fn test_starts_with_fn() {
+    fn test_ends_with_fn() {
         let mut true_args = vec![
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value"))),
+            Ok(LhsValue::Bytes(Bytes::Borrowed(b"value"))),
+        ]
+        .into_iter();
+        assert_eq!(ends_with_impl(&mut true_args), Some(LhsValue::Bool(true)));
+
+        let mut false_args = vec![
             Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value"))),
             Ok(LhsValue::Bytes(Bytes::Borrowed(b"exampl"))),
         ]
         .into_iter();
-        assert_eq!(starts_with_impl(&mut true_args), Some(LhsValue::Bool(true)));
-
-        let mut false_args = vec![
-            Ok(LhsValue::Bytes(Bytes::Borrowed(b"example_value"))),
-            Ok(LhsValue::Bytes(Bytes::Borrowed(b"empl"))),
-        ]
-        .into_iter();
-        assert_eq!(
-            starts_with_impl(&mut false_args),
-            Some(LhsValue::Bool(false))
-        );
+        assert_eq!(ends_with_impl(&mut false_args), Some(LhsValue::Bool(false)));
 
         let mut empty_source_args = vec![
             Ok(LhsValue::Bytes(Bytes::Borrowed(b""))),
@@ -104,7 +99,7 @@ mod tests {
         ]
         .into_iter();
         assert_eq!(
-            starts_with_impl(&mut empty_source_args),
+            ends_with_impl(&mut empty_source_args),
             Some(LhsValue::Bool(false))
         );
 
@@ -114,7 +109,7 @@ mod tests {
         ]
         .into_iter();
         assert_eq!(
-            starts_with_impl(&mut empty_substring_args),
+            ends_with_impl(&mut empty_substring_args),
             Some(LhsValue::Bool(true))
         );
     }
@@ -123,27 +118,27 @@ mod tests {
     #[should_panic(expected = "expected 2 arguments, got 1")]
     fn test_too_few_args() {
         let mut args = vec![Err(Type::Bytes)].into_iter();
-        starts_with_impl(&mut args);
+        ends_with_impl(&mut args);
     }
 
     #[test]
     #[should_panic(expected = "expected 2 arguments, got 3")]
     fn test_too_many_args() {
         let mut args = vec![Err(Type::Bytes), Err(Type::Bytes), Err(Type::Bytes)].into_iter();
-        starts_with_impl(&mut args);
+        ends_with_impl(&mut args);
     }
 
     #[test]
     fn test_bad_args() {
         let mut first_arg_error =
             vec![Err(Type::Bytes), Ok(LhsValue::Bytes(Bytes::Borrowed(b"")))].into_iter();
-        assert_eq!(starts_with_impl(&mut first_arg_error), None);
+        assert_eq!(ends_with_impl(&mut first_arg_error), None);
 
         let mut second_arg_error =
             vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b""))), Err(Type::Bytes)].into_iter();
-        assert_eq!(starts_with_impl(&mut second_arg_error), None);
+        assert_eq!(ends_with_impl(&mut second_arg_error), None);
 
         let mut both_arg_error = vec![Err(Type::Bytes), Err(Type::Bytes)].into_iter();
-        assert_eq!(starts_with_impl(&mut both_arg_error), None);
+        assert_eq!(ends_with_impl(&mut both_arg_error), None);
     }
 }

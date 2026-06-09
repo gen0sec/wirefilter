@@ -6,10 +6,12 @@ use std::alloc::System;
 static A: System = System;
 
 use criterion::{Bencher, Criterion, criterion_group, criterion_main};
-use std::{borrow::Cow, clone::Clone, fmt::Debug, net::IpAddr};
+use std::clone::Clone;
+use std::fmt::Debug;
+use std::net::IpAddr;
 use wirefilter::{
-    ExecutionContext, FilterAst, FunctionArgKind, FunctionArgs, GetType, LhsValue, SchemeBuilder,
-    SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionParam, Type,
+    Bytes, ExecutionContext, FilterAst, FunctionArgs, GetType, LhsValue, SchemeBuilder,
+    SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionParam, Type,
 };
 
 fn lowercase<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
@@ -17,7 +19,7 @@ fn lowercase<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     match input {
         LhsValue::Bytes(mut bytes) => {
             let make_lowercase = match bytes {
-                Cow::Borrowed(bytes) => bytes.iter().any(u8::is_ascii_uppercase),
+                Bytes::Borrowed(bytes) => bytes.iter().any(u8::is_ascii_uppercase),
                 _ => true,
             };
             if make_lowercase {
@@ -34,7 +36,7 @@ fn uppercase<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     match input {
         LhsValue::Bytes(mut bytes) => {
             let make_uppercase = match bytes {
-                Cow::Borrowed(bytes) => bytes.iter().any(u8::is_ascii_lowercase),
+                Bytes::Borrowed(bytes) => bytes.iter().any(u8::is_ascii_lowercase),
                 _ => true,
             };
             if make_uppercase {
@@ -209,7 +211,7 @@ fn bench_string_function_comparison(c: &mut Criterion) {
                 "lowercase",
                 SimpleFunctionDefinition {
                     params: vec![SimpleFunctionParam {
-                        arg_kind: FunctionArgKind::Field,
+                        arg_kind: SimpleFunctionArgKind::Field,
                         val_type: Type::Bytes,
                     }],
                     opt_params: vec![],
@@ -221,7 +223,7 @@ fn bench_string_function_comparison(c: &mut Criterion) {
                 "uppercase",
                 SimpleFunctionDefinition {
                     params: vec![SimpleFunctionParam {
-                        arg_kind: FunctionArgKind::Field,
+                        arg_kind: SimpleFunctionArgKind::Field,
                         val_type: Type::Bytes,
                     }],
                     opt_params: vec![],

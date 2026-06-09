@@ -1,19 +1,16 @@
-use super::{
-    ValueExpr,
-    field_expr::IdentifierExpr,
-    parse::FilterParser,
-    visitor::{Visitor, VisitorMut},
-};
-use crate::{
-    compiler::Compiler,
-    execution_context::ExecutionContext,
-    filter::{CompiledExpr, CompiledOneExpr, CompiledValueExpr, CompiledVecExpr},
-    lex::{Lex, LexErrorKind, LexResult, LexWith, expect, skip_space, span},
-    lhs_types::{Array, Map, TypedArray},
-    scheme::{FieldIndex, IndexAccessError},
-    types::{GetType, IntoIter, LhsValue, Type},
-};
-use serde::{Serialize, Serializer, ser::SerializeSeq};
+use super::ValueExpr;
+use super::field_expr::IdentifierExpr;
+use super::parse::FilterParser;
+use super::visitor::{Visitor, VisitorMut};
+use crate::compiler::Compiler;
+use crate::execution_context::ExecutionContext;
+use crate::filter::{CompiledExpr, CompiledOneExpr, CompiledValueExpr, CompiledVecExpr};
+use crate::lex::{Lex, LexErrorKind, LexResult, LexWith, expect, skip_space, span};
+use crate::lhs_types::{Array, Map, TypedArray};
+use crate::scheme::{FieldIndex, IndexAccessError};
+use crate::types::{GetType, IntoIter, LhsValue, Type};
+use serde::ser::SerializeSeq;
+use serde::{Serialize, Serializer};
 
 const BOOL_ARRAY: TypedArray<'_, bool> = TypedArray::new();
 
@@ -528,10 +525,11 @@ impl<'a> Iterator for MapEachIterator<'a, '_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ast::field_expr::IdentifierExpr;
     use crate::{
-        Array, FieldIndex, FilterParser, FunctionArgKind, FunctionArgs, FunctionCallArgExpr,
-        FunctionCallExpr, Scheme, SchemeBuilder, SimpleFunctionDefinition, SimpleFunctionImpl,
-        SimpleFunctionParam, ast::field_expr::IdentifierExpr,
+        Array, FieldIndex, FilterParser, FunctionArgs, FunctionCallArgExpr, FunctionCallExpr,
+        Scheme, SchemeBuilder, SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl,
+        SimpleFunctionParam,
     };
     use std::sync::LazyLock;
 
@@ -571,7 +569,7 @@ mod tests {
                 "array",
                 SimpleFunctionDefinition {
                     params: vec![SimpleFunctionParam {
-                        arg_kind: FunctionArgKind::Field,
+                        arg_kind: SimpleFunctionArgKind::Field,
                         val_type: Type::Bytes,
                     }],
                     opt_params: vec![],
@@ -585,7 +583,7 @@ mod tests {
                 "array2",
                 SimpleFunctionDefinition {
                     params: vec![SimpleFunctionParam {
-                        arg_kind: FunctionArgKind::Field,
+                        arg_kind: SimpleFunctionArgKind::Field,
                         val_type: Type::Bytes,
                     }],
                     opt_params: vec![],
@@ -938,7 +936,10 @@ mod tests {
                     LhsValue::Bytes(bytes) => bytes,
                     _ => unreachable!(),
                 };
-                assert_eq!(std::str::from_utf8(&bytes).unwrap(), format!("[{i}][{j}]"));
+                assert_eq!(
+                    simdutf8::basic::from_utf8(&bytes).unwrap(),
+                    format!("[{i}][{j}]")
+                );
             }
 
             let indexes = [FieldIndex::MapEach, FieldIndex::ArrayIndex(i)];
@@ -950,7 +951,10 @@ mod tests {
                     LhsValue::Bytes(bytes) => bytes,
                     _ => unreachable!(),
                 };
-                assert_eq!(std::str::from_utf8(&bytes).unwrap(), format!("[{j}][{i}]"));
+                assert_eq!(
+                    simdutf8::basic::from_utf8(&bytes).unwrap(),
+                    format!("[{j}][{i}]")
+                );
             }
         }
 
@@ -965,7 +969,10 @@ mod tests {
                 LhsValue::Bytes(bytes) => bytes,
                 _ => unreachable!(),
             };
-            assert_eq!(std::str::from_utf8(&bytes).unwrap(), format!("[{i}][{j}]"));
+            assert_eq!(
+                simdutf8::basic::from_utf8(&bytes).unwrap(),
+                format!("[{i}][{j}]")
+            );
             j = (j + 1) % 10;
             i += (j == 0) as u32;
         }

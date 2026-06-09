@@ -1,22 +1,18 @@
-use super::{
-    Expr,
-    function_expr::FunctionCallExpr,
-    parse::FilterParser,
-    visitor::{Visitor, VisitorMut},
-};
-use crate::{
-    ExecutionContext, Scheme,
-    ast::index_expr::{Compare, IndexExpr},
-    compiler::Compiler,
-    filter::CompiledExpr,
-    lex::{Lex, LexErrorKind, LexResult, LexWith, expect, skip_space, span},
-    range_set::RangeSet,
-    rhs_types::{Bytes, ExplicitIpRange, ListName, Regex, Wildcard},
-    scheme::{Field, Identifier, List},
-    searcher::{EmptySearcher, TwoWaySearcher},
-    strict_partial_ord::StrictPartialOrd,
-    types::{GetType, LhsValue, RhsValue, RhsValues, Type},
-};
+use super::Expr;
+use super::function_expr::FunctionCallExpr;
+use super::parse::FilterParser;
+use super::visitor::{Visitor, VisitorMut};
+use crate::ast::index_expr::{Compare, IndexExpr};
+use crate::compiler::Compiler;
+use crate::filter::CompiledExpr;
+use crate::lex::{Lex, LexErrorKind, LexResult, LexWith, expect, skip_space, span};
+use crate::range_set::RangeSet;
+use crate::rhs_types::{BytesExpr, ExplicitIpRange, ListName, Regex, Wildcard};
+use crate::scheme::{Field, Identifier, List};
+use crate::searcher::{EmptySearcher, MemmemSearcher};
+use crate::strict_partial_ord::StrictPartialOrd;
+use crate::types::{GetType, LhsValue, RhsValue, RhsValues, Type};
+use crate::{ExecutionContext, Scheme};
 use serde::{Serialize, Serializer};
 use sliceslice::MemchrSearcher;
 use std::cmp::Ordering;
@@ -148,7 +144,7 @@ pub enum ComparisonOpExpr {
 
     /// "contains" comparison
     #[serde(serialize_with = "serialize_contains")]
-    Contains(Bytes),
+    Contains(BytesExpr),
 
     /// "matches / ~" comparison
     #[serde(serialize_with = "serialize_matches")]
@@ -168,7 +164,7 @@ pub enum ComparisonOpExpr {
 
     /// "contains {...}" comparison
     #[serde(serialize_with = "serialize_contains_one_of")]
-    ContainsOneOf(Vec<Bytes>),
+    ContainsOneOf(Vec<BytesExpr>),
 
     /// "in $..." comparison
     #[serde(serialize_with = "serialize_list")]
@@ -201,7 +197,7 @@ fn serialize_is_true<S: Serializer>(ser: S) -> Result<S::Ok, S::Error> {
     out.end()
 }
 
-fn serialize_contains<S: Serializer>(rhs: &Bytes, ser: S) -> Result<S::Ok, S::Error> {
+fn serialize_contains<S: Serializer>(rhs: &BytesExpr, ser: S) -> Result<S::Ok, S::Error> {
     serialize_op_rhs("Contains", rhs, ser)
 }
 
@@ -224,7 +220,7 @@ fn serialize_one_of<S: Serializer>(rhs: &RhsValues, ser: S) -> Result<S::Ok, S::
     serialize_op_rhs("OneOf", rhs, ser)
 }
 
-fn serialize_contains_one_of<S: Serializer>(rhs: &[Bytes], ser: S) -> Result<S::Ok, S::Error> {
+fn serialize_contains_one_of<S: Serializer>(rhs: &[BytesExpr], ser: S) -> Result<S::Ok, S::Error> {
     serialize_op_rhs("ContainsOneOf", rhs, ser)
 }
 
@@ -372,7 +368,7 @@ impl ComparisonExpr {
                 }
                 (Type::Bytes, ComparisonOp::Bytes(op)) => match op {
                     BytesOp::Contains => {
-                        let (bytes, input) = Bytes::lex(input)?;
+                        let (bytes, input) = BytesExpr::lex(input)?;
                         (ComparisonOpExpr::Contains(bytes), input)
                     }
                     BytesOp::Matches => {
@@ -472,7 +468,7 @@ impl Expr for ComparisonExpr {
                     ($op:tt, $def:ident) => {
                         match rhs {
                             RhsValue::Bytes(bytes) => {
-                                struct BytesOp(Bytes);
+                                struct BytesOp(BytesExpr);
 
                                 impl<U> Compare<U> for BytesOp {
                                     #[inline]
@@ -686,7 +682,7 @@ impl Expr for ComparisonExpr {
                     };
                 }
 
-                search!(TwoWaySearcher::new(bytes))
+                search!(MemmemSearcher::new(bytes))
             }
             ComparisonOpExpr::Matches(regex) => lhs.compile_with(compiler, false, regex),
             ComparisonOpExpr::Wildcard(wildcard) => lhs.compile_with(compiler, false, wildcard),
@@ -697,8 +693,8 @@ impl Expr for ComparisonExpr {
                 RhsValues::Ip(ranges) => {
                     let mut v4 = Vec::new();
                     let mut v6 = Vec::new();
-                    for range in ranges {
-                        match range.clone().into() {
+                    for range in ranges.into_iter() {
+                        match range.into() {
                             ExplicitIpRange::V4(range) => v4.push(range),
                             ExplicitIpRange::V6(range) => v6.push(range),
                         }
@@ -798,27 +794,28 @@ impl Expr for ComparisonExpr {
 #[allow(clippy::bool_assert_comparison)]
 mod tests {
     use super::*;
+    use crate::ast::function_expr::{FunctionCallArgExpr, FunctionCallExpr};
+    use crate::ast::logical_expr::LogicalExpr;
+    use crate::execution_context::ExecutionContext;
+    use crate::functions::{
+        FunctionArgKind, FunctionArgs, FunctionDefinition, FunctionDefinitionContext,
+        FunctionParam, FunctionParamError, SimpleFunctionDefinition, SimpleFunctionImpl,
+        SimpleFunctionOptParam, SimpleFunctionParam,
+    };
+    use crate::lhs_types::{Array, Map};
+    use crate::list_matcher::{ListDefinition, ListMatcher};
+    use crate::rhs_types::{BytesFormat, IpRange, RegexFormat};
+    use crate::scheme::{FieldIndex, IndexAccessError, Scheme};
+    use crate::types::ExpectedType;
     use crate::{
-        BytesFormat, FieldRef, LhsValue, ParserSettings, SchemeBuilder, TypedMap,
-        ast::{
-            function_expr::{FunctionCallArgExpr, FunctionCallExpr},
-            logical_expr::LogicalExpr,
-        },
-        execution_context::ExecutionContext,
-        functions::{
-            FunctionArgKind, FunctionArgs, FunctionDefinition, FunctionDefinitionContext,
-            FunctionParam, FunctionParamError, SimpleFunctionDefinition, SimpleFunctionImpl,
-            SimpleFunctionOptParam, SimpleFunctionParam,
-        },
-        lhs_types::{Array, Map},
-        list_matcher::{ListDefinition, ListMatcher},
-        rhs_types::{IpRange, RegexFormat},
-        scheme::{FieldIndex, IndexAccessError, Scheme},
-        types::ExpectedType,
+        FieldRef, LhsValue, ParserSettings, SchemeBuilder, SimpleFunctionArgKind, TypedMap,
     };
     use cidr::IpCidr;
+    use serde::Deserialize;
+    use std::convert::TryFrom;
+    use std::iter::once;
+    use std::net::IpAddr;
     use std::sync::LazyLock;
-    use std::{convert::TryFrom, iter::once, net::IpAddr};
 
     fn any_function<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
         match args.next()? {
@@ -878,11 +875,11 @@ mod tests {
         ) -> Result<(), FunctionParamError> {
             match params.len() {
                 0 => {
-                    next_param.expect_arg_kind(FunctionArgKind::Field)?;
+                    next_param.arg_kind().expect(FunctionArgKind::Field)?;
                     next_param.expect_val_type(once(ExpectedType::Array))?;
                 }
                 1 => {
-                    next_param.expect_arg_kind(FunctionArgKind::Field)?;
+                    next_param.arg_kind().expect(FunctionArgKind::Field)?;
                     next_param.expect_val_type(once(ExpectedType::Type(Type::Array(
                         Type::Bool.into(),
                     ))))?;
@@ -949,12 +946,13 @@ mod tests {
     pub struct NumMListDefinition {}
 
     impl ListDefinition for NumMListDefinition {
-        fn matcher_from_json_value(
+        fn deserialize_matcher<'de>(
             &self,
             _: Type,
-            _: serde_json::Value,
-        ) -> Result<Box<dyn ListMatcher>, serde_json::Error> {
-            Ok(Box::new(NumMatcher {}))
+            deserializer: &mut dyn erased_serde::Deserializer<'de>,
+        ) -> Result<Box<dyn ListMatcher>, erased_serde::Error> {
+            let matcher = erased_serde::deserialize::<NumMatcher>(deserializer)?;
+            Ok(Box::new(matcher))
         }
 
         fn new_matcher(&self) -> Box<dyn ListMatcher> {
@@ -979,7 +977,7 @@ mod tests {
                 "any",
                 SimpleFunctionDefinition {
                     params: vec![SimpleFunctionParam {
-                        arg_kind: FunctionArgKind::Field,
+                        arg_kind: SimpleFunctionArgKind::Field,
                         val_type: Type::Array(Type::Bool.into()),
                     }],
                     opt_params: vec![],
@@ -993,7 +991,7 @@ mod tests {
                 "echo",
                 SimpleFunctionDefinition {
                     params: vec![SimpleFunctionParam {
-                        arg_kind: FunctionArgKind::Field,
+                        arg_kind: SimpleFunctionArgKind::Field,
                         val_type: Type::Bytes,
                     }],
                     opt_params: vec![],
@@ -1007,7 +1005,7 @@ mod tests {
                 "lowercase",
                 SimpleFunctionDefinition {
                     params: vec![SimpleFunctionParam {
-                        arg_kind: FunctionArgKind::Field,
+                        arg_kind: SimpleFunctionArgKind::Field,
                         val_type: Type::Bytes,
                     }],
                     opt_params: vec![],
@@ -1023,11 +1021,11 @@ mod tests {
                     params: vec![],
                     opt_params: vec![
                         SimpleFunctionOptParam {
-                            arg_kind: FunctionArgKind::Field,
+                            arg_kind: SimpleFunctionArgKind::Field,
                             default_value: "".into(),
                         },
                         SimpleFunctionOptParam {
-                            arg_kind: FunctionArgKind::Literal,
+                            arg_kind: SimpleFunctionArgKind::Literal,
                             default_value: "".into(),
                         },
                     ],
@@ -1044,7 +1042,7 @@ mod tests {
                 "len",
                 SimpleFunctionDefinition {
                     params: vec![SimpleFunctionParam {
-                        arg_kind: FunctionArgKind::Field,
+                        arg_kind: SimpleFunctionArgKind::Field,
                         val_type: Type::Bytes,
                     }],
                     opt_params: vec![],
@@ -1938,7 +1936,7 @@ mod tests {
                                 identifier: IdentifierExpr::Field(field("http.host").to_owned()),
                                 indexes: vec![],
                             }),
-                            FunctionCallArgExpr::Literal(RhsValue::Bytes(Bytes::from(
+                            FunctionCallArgExpr::Literal(RhsValue::Bytes(BytesExpr::from(
                                 ".org".to_owned()
                             ))),
                         ],
@@ -2078,7 +2076,7 @@ mod tests {
                                 identifier: IdentifierExpr::Field(field("http.cookies").to_owned()),
                                 indexes: vec![FieldIndex::MapEach],
                             }),
-                            FunctionCallArgExpr::Literal(RhsValue::Bytes(Bytes::from(
+                            FunctionCallArgExpr::Literal(RhsValue::Bytes(BytesExpr::from(
                                 "-cf".to_owned()
                             ))),
                         ],
@@ -2147,7 +2145,7 @@ mod tests {
                                 identifier: IdentifierExpr::Field(field("http.headers").to_owned()),
                                 indexes: vec![FieldIndex::MapEach],
                             }),
-                            FunctionCallArgExpr::Literal(RhsValue::Bytes(Bytes::from(
+                            FunctionCallArgExpr::Literal(RhsValue::Bytes(BytesExpr::from(
                                 "-cf".to_owned()
                             ))),
                         ],
@@ -2313,7 +2311,7 @@ mod tests {
                                 identifier: IdentifierExpr::Field(field("http.cookies").to_owned()),
                                 indexes: vec![FieldIndex::MapEach],
                             }),
-                            FunctionCallArgExpr::Literal(RhsValue::Bytes(Bytes::from(
+                            FunctionCallArgExpr::Literal(RhsValue::Bytes(BytesExpr::from(
                                 "-cf".to_owned()
                             ))),
                         ],
@@ -2466,7 +2464,7 @@ mod tests {
         );
     }
 
-    #[derive(Debug, PartialEq, Eq, Serialize, Clone)]
+    #[derive(Debug, PartialEq, Eq, Serialize, Clone, Deserialize)]
     pub struct NumMatcher {}
 
     impl ListMatcher for NumMatcher {
@@ -2482,10 +2480,6 @@ mod tests {
                 LhsValue::Int(num) => self.num_matches(*num, list_id),
                 _ => unreachable!(), // TODO: is this unreachable?
             }
-        }
-
-        fn to_json_value(&self) -> serde_json::Value {
-            serde_json::Value::Null
         }
 
         fn clear(&mut self) {}
@@ -2564,7 +2558,10 @@ mod tests {
         assert_eq!(expr.execute_one(ctx), true);
 
         let json = serde_json::to_string(ctx).unwrap();
-        assert_eq!(json, "{\"tcp.port\":1001,\"$lists\":[]}");
+        assert_eq!(
+            json,
+            "{\"tcp.port\":1001,\"$lists\":[{\"type\":\"Int\",\"data\":{}}]}"
+        );
     }
 
     #[test]
@@ -2769,6 +2766,7 @@ mod tests {
         assert_eq!(true_count, 1);
     }
 
+    #[cfg(feature = "regex")]
     #[test]
     fn test_raw_string() {
         // Equal operator
@@ -2781,7 +2779,7 @@ mod tests {
                 },
                 op: ComparisonOpExpr::Ordering {
                     op: OrderingOp::Equal,
-                    rhs: RhsValue::Bytes(Bytes::new("ab".as_bytes(), BytesFormat::Raw(3))),
+                    rhs: RhsValue::Bytes(BytesExpr::new("ab".as_bytes(), BytesFormat::Raw(3))),
                 },
             }
         );
@@ -2838,7 +2836,7 @@ mod tests {
 
         // Wildcard operator
         let wildcard = Wildcard::new(
-            Bytes::new(r"foo*\*\\".as_bytes(), BytesFormat::Raw(2)),
+            BytesExpr::new(r"foo*\*\\".as_bytes(), BytesFormat::Raw(2)),
             usize::MAX,
         )
         .unwrap();
@@ -2882,7 +2880,7 @@ mod tests {
 
         // Strict wildcard operator
         let wildcard = Wildcard::new(
-            Bytes::new(r"foo*\*\\".as_bytes(), BytesFormat::Raw(2)),
+            BytesExpr::new(r"foo*\*\\".as_bytes(), BytesFormat::Raw(2)),
             usize::MAX,
         )
         .unwrap();
@@ -2937,7 +2935,7 @@ mod tests {
                                 identifier: IdentifierExpr::Field(field("http.host").to_owned()),
                                 indexes: vec![],
                             }),
-                            FunctionCallArgExpr::Literal(RhsValue::Bytes(Bytes::new(
+                            FunctionCallArgExpr::Literal(RhsValue::Bytes(BytesExpr::new(
                                 "cd".as_bytes(),
                                 BytesFormat::Raw(1)
                             )))
@@ -2948,7 +2946,7 @@ mod tests {
                 },
                 op: ComparisonOpExpr::Ordering {
                     op: OrderingOp::Equal,
-                    rhs: RhsValue::Bytes(Bytes::new("abcd".as_bytes(), BytesFormat::Raw(2)))
+                    rhs: RhsValue::Bytes(BytesExpr::new("abcd".as_bytes(), BytesFormat::Raw(2)))
                 }
             }
         );

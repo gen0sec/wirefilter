@@ -1,21 +1,19 @@
-use crate::{
-    lex::{Lex, LexResult, LexWith, expect, skip_space},
-    lhs_types::{Array, ArrayIterator, Map, MapIter, MapValuesIntoIter},
-    rhs_types::{Bytes, IntRange, IpRange, UninhabitedArray, UninhabitedBool, UninhabitedMap},
-    scheme::{FieldIndex, IndexAccessError},
-    strict_partial_ord::StrictPartialOrd,
+use crate::lex::{Lex, LexResult, LexWith, expect, skip_space};
+use crate::lhs_types::{Array, ArrayIntoIter, ArrayIter, Bytes, Map, MapIter, MapValuesIntoIter};
+use crate::rhs_types::{
+    BytesExpr, IntRange, IpRange, UninhabitedArray, UninhabitedBool, UninhabitedMap,
 };
+use crate::scheme::{FieldIndex, IndexAccessError};
+use crate::strict_partial_ord::StrictPartialOrd;
 use serde::de::{DeserializeSeed, Deserializer};
 use serde::{Deserialize, Serialize, Serializer};
-use std::{
-    borrow::Cow,
-    cmp::Ordering,
-    collections::BTreeSet,
-    convert::TryFrom,
-    fmt::{self, Debug, Formatter},
-    iter::once,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
-};
+use std::borrow::Cow;
+use std::cmp::Ordering;
+use std::collections::BTreeSet;
+use std::convert::TryFrom;
+use std::fmt::{self, Debug, Formatter};
+use std::iter::once;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use thiserror::Error;
 
 fn lex_rhs_values<'i, T: Lex<'i>>(input: &'i str) -> LexResult<'i, Vec<T>> {
@@ -139,7 +137,7 @@ pub struct TypeMismatchError {
 }
 
 macro_rules! replace_underscore {
-    ($name:ident ($val_ty:ty)) => {
+    ($name:ident($val_ty:ty)) => {
         Type::$name(_)
     };
     ($name:ident) => {
@@ -331,7 +329,10 @@ macro_rules! declare_types {
         impl From<RhsValue> for RhsValues {
             fn from(rhs: RhsValue) -> Self {
                 match rhs {
-                    $(RhsValue::$name(rhs) => RhsValues::$name(vec![rhs.into()]),)*
+                    $(RhsValue::$name(rhs) => {
+                        #[allow(unreachable_code)]
+                        RhsValues::$name(vec![rhs.into()])
+                    })*
                 }
             }
         }
@@ -341,7 +342,10 @@ macro_rules! declare_types {
             pub fn push(&mut self, rhs: RhsValue) -> Result<(), TypeMismatchError> {
                 match self {
                     $(RhsValues::$name(vec) => match rhs {
-                        RhsValue::$name(rhs) => Ok(vec.push(rhs.into())),
+                        RhsValue::$name(rhs) => {
+                            #[allow(unreachable_code)]
+                            Ok(vec.push(rhs.into()))
+                        }
                         _ => Err(TypeMismatchError {
                             expected: self.get_type().into(),
                             actual: rhs.get_type(),
@@ -464,30 +468,9 @@ impl PartialEq<RhsValue> for LhsValue<'_> {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(untagged)]
-pub enum BytesOrString<'a> {
-    BorrowedBytes(#[serde(borrow)] &'a [u8]),
-    OwnedBytes(Vec<u8>),
-    BorrowedString(#[serde(borrow)] &'a str),
-    OwnedString(String),
-}
-
-impl<'a> BytesOrString<'a> {
-    pub fn into_bytes(self) -> Cow<'a, [u8]> {
-        match self {
-            BytesOrString::BorrowedBytes(slice) => (*slice).into(),
-            BytesOrString::OwnedBytes(vec) => vec.into(),
-            BytesOrString::BorrowedString(str) => str.as_bytes().into(),
-            BytesOrString::OwnedString(str) => str.into_bytes().into(),
-        }
-    }
-}
-
 mod private {
     use super::IntoValue;
-    use crate::{TypedArray, TypedMap};
-    use std::borrow::Cow;
+    use crate::{Bytes, TypedArray, TypedMap};
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
     pub trait SealedIntoValue {}
@@ -502,18 +485,11 @@ mod private {
     impl SealedIntoValue for u32 {}
     impl SealedIntoValue for i64 {}
 
-    impl SealedIntoValue for &[u8] {}
-    impl SealedIntoValue for Box<[u8]> {}
-    impl SealedIntoValue for Vec<u8> {}
-    impl SealedIntoValue for Cow<'_, [u8]> {}
-    impl SealedIntoValue for &str {}
-    impl SealedIntoValue for Box<str> {}
-    impl SealedIntoValue for String {}
-    impl SealedIntoValue for Cow<'_, str> {}
-
     impl SealedIntoValue for IpAddr {}
     impl SealedIntoValue for Ipv4Addr {}
     impl SealedIntoValue for Ipv6Addr {}
+
+    impl<'a, T> SealedIntoValue for T where Bytes<'a>: From<T> {}
 
     impl<'a, V: IntoValue<'a>> SealedIntoValue for TypedArray<'a, V> {}
     impl<'a, V: IntoValue<'a>> SealedIntoValue for TypedMap<'a, V> {}
@@ -597,7 +573,7 @@ impl<'a> IntoValue<'a> for &'a [u8] {
 
     #[inline]
     fn into_value(self) -> LhsValue<'a> {
-        LhsValue::Bytes(Cow::Borrowed(self))
+        LhsValue::Bytes(Bytes::from(self))
     }
 }
 
@@ -606,7 +582,7 @@ impl<'a> IntoValue<'a> for Box<[u8]> {
 
     #[inline]
     fn into_value(self) -> LhsValue<'a> {
-        LhsValue::Bytes(Cow::Owned(Vec::from(self)))
+        LhsValue::Bytes(Bytes::from(self))
     }
 }
 
@@ -615,7 +591,7 @@ impl<'a> IntoValue<'a> for Vec<u8> {
 
     #[inline]
     fn into_value(self) -> LhsValue<'a> {
-        LhsValue::Bytes(Cow::Owned(self))
+        LhsValue::Bytes(Bytes::from(self))
     }
 }
 
@@ -624,7 +600,7 @@ impl<'a> IntoValue<'a> for Cow<'a, [u8]> {
 
     #[inline]
     fn into_value(self) -> LhsValue<'a> {
-        LhsValue::Bytes(self)
+        LhsValue::Bytes(Bytes::from(self))
     }
 }
 
@@ -633,7 +609,7 @@ impl<'a> IntoValue<'a> for &'a str {
 
     #[inline]
     fn into_value(self) -> LhsValue<'a> {
-        LhsValue::Bytes(Cow::Borrowed(self.as_bytes()))
+        LhsValue::Bytes(Bytes::from(self))
     }
 }
 
@@ -642,7 +618,7 @@ impl<'a> IntoValue<'a> for Box<str> {
 
     #[inline]
     fn into_value(self) -> LhsValue<'a> {
-        LhsValue::Bytes(Cow::Owned(Vec::from(Box::<[u8]>::from(self))))
+        LhsValue::Bytes(Bytes::from(self))
     }
 }
 
@@ -651,7 +627,7 @@ impl<'a> IntoValue<'a> for String {
 
     #[inline]
     fn into_value(self) -> LhsValue<'a> {
-        LhsValue::Bytes(Cow::Owned(self.into_bytes()))
+        LhsValue::Bytes(Bytes::from(self))
     }
 }
 
@@ -660,10 +636,16 @@ impl<'a> IntoValue<'a> for Cow<'a, str> {
 
     #[inline]
     fn into_value(self) -> LhsValue<'a> {
-        LhsValue::Bytes(match self {
-            Cow::Borrowed(slice) => Cow::Borrowed(slice.as_bytes()),
-            Cow::Owned(vec) => Cow::Owned(vec.into()),
-        })
+        LhsValue::Bytes(Bytes::from(self))
+    }
+}
+
+impl<'a> IntoValue<'a> for Bytes<'a> {
+    const TYPE: Type = Type::Bytes;
+
+    #[inline]
+    fn into_value(self) -> LhsValue<'a> {
+        LhsValue::Bytes(self)
     }
 }
 
@@ -739,7 +721,7 @@ impl<'a> From<&'a RhsValue> for LhsValue<'a> {
     fn from(rhs_value: &'a RhsValue) -> Self {
         match rhs_value {
             RhsValue::Ip(ip) => LhsValue::Ip(*ip),
-            RhsValue::Bytes(bytes) => LhsValue::Bytes(Cow::Borrowed(bytes)),
+            RhsValue::Bytes(bytes) => LhsValue::Bytes(Bytes::Borrowed(bytes)),
             RhsValue::Int(integer) => LhsValue::Int(*integer),
             RhsValue::Bool(b) => match *b {},
             RhsValue::Array(a) => match *a {},
@@ -752,7 +734,7 @@ impl From<RhsValue> for LhsValue<'_> {
     fn from(rhs_value: RhsValue) -> Self {
         match rhs_value {
             RhsValue::Ip(ip) => LhsValue::Ip(ip),
-            RhsValue::Bytes(bytes) => LhsValue::Bytes(Cow::Owned(bytes.into())),
+            RhsValue::Bytes(bytes) => LhsValue::Bytes(Bytes::Owned(bytes.into())),
             RhsValue::Int(integer) => LhsValue::Int(integer),
             RhsValue::Bool(b) => match b {},
             RhsValue::Array(a) => match a {},
@@ -767,7 +749,7 @@ impl<'a> LhsValue<'a> {
     pub fn as_ref(&'a self) -> Self {
         match self {
             LhsValue::Ip(ip) => LhsValue::Ip(*ip),
-            LhsValue::Bytes(bytes) => LhsValue::Bytes(Cow::Borrowed(bytes)),
+            LhsValue::Bytes(bytes) => LhsValue::Bytes(Bytes::Borrowed(bytes)),
             LhsValue::Int(integer) => LhsValue::Int(*integer),
             LhsValue::Bool(b) => LhsValue::Bool(*b),
             LhsValue::Array(a) => LhsValue::Array(a.as_ref()),
@@ -779,7 +761,7 @@ impl<'a> LhsValue<'a> {
     pub fn into_owned(self) -> LhsValue<'static> {
         match self {
             LhsValue::Ip(ip) => LhsValue::Ip(ip),
-            LhsValue::Bytes(bytes) => LhsValue::Bytes(Cow::Owned(bytes.into_owned())),
+            LhsValue::Bytes(bytes) => LhsValue::Bytes(Bytes::Owned(bytes.into_owned())),
             LhsValue::Int(i) => LhsValue::Int(i),
             LhsValue::Bool(b) => LhsValue::Bool(b),
             LhsValue::Array(arr) => LhsValue::Array(arr.into_owned()),
@@ -858,7 +840,7 @@ impl<'a> LhsValue<'a> {
     /// Returns an iterator over the Map or Array
     pub(crate) fn iter(&'a self) -> Option<Iter<'a>> {
         match self {
-            LhsValue::Array(array) => Some(Iter::IterArray(array.as_slice().iter())),
+            LhsValue::Array(array) => Some(Iter::IterArray(array.iter())),
             LhsValue::Map(map) => Some(Iter::IterMap(map.iter())),
             _ => None,
         }
@@ -873,10 +855,10 @@ impl Serialize for LhsValue<'_> {
         match self {
             LhsValue::Ip(ip) => ip.serialize(serializer),
             LhsValue::Bytes(bytes) => {
-                if let Ok(s) = std::str::from_utf8(bytes) {
-                    s.serialize(serializer)
+                if let Ok(s) = simdutf8::basic::from_utf8(bytes) {
+                    serializer.serialize_str(s)
                 } else {
-                    bytes.serialize(serializer)
+                    serializer.serialize_bytes(bytes)
                 }
             }
             LhsValue::Int(num) => num.serialize(serializer),
@@ -900,9 +882,7 @@ impl<'de> DeserializeSeed<'de> for LhsValueSeed<'_> {
             Type::Ip => Ok(LhsValue::Ip(std::net::IpAddr::deserialize(deserializer)?)),
             Type::Int => Ok(LhsValue::Int(i64::deserialize(deserializer)?)),
             Type::Bool => Ok(LhsValue::Bool(bool::deserialize(deserializer)?)),
-            Type::Bytes => Ok(LhsValue::Bytes(
-                BytesOrString::deserialize(deserializer)?.into_bytes(),
-            )),
+            Type::Bytes => Ok(LhsValue::Bytes(Bytes::deserialize(deserializer)?)),
             Type::Array(ty) => Ok(LhsValue::Array({
                 let mut arr = Array::new(*ty);
                 arr.deserialize(deserializer)?;
@@ -918,7 +898,7 @@ impl<'de> DeserializeSeed<'de> for LhsValueSeed<'_> {
 }
 
 pub enum IntoIter<'a> {
-    IntoArray(ArrayIterator<'a>),
+    IntoArray(ArrayIntoIter<'a>),
     IntoMap(MapValuesIntoIter<'a>),
 }
 
@@ -947,19 +927,20 @@ impl ExactSizeIterator for IntoIter<'_> {
 }
 
 impl<'a> IntoIterator for LhsValue<'a> {
-    type Item = LhsValue<'a>;
     type IntoIter = IntoIter<'a>;
+    type Item = LhsValue<'a>;
+
     fn into_iter(self) -> Self::IntoIter {
         match self {
             LhsValue::Array(array) => IntoIter::IntoArray(array.into_iter()),
-            LhsValue::Map(map) => IntoIter::IntoMap(map.values_into_iter()),
+            LhsValue::Map(map) => IntoIter::IntoMap(map.into_values()),
             _ => unreachable!(),
         }
     }
 }
 
 pub(crate) enum Iter<'a> {
-    IterArray(std::slice::Iter<'a, LhsValue<'a>>),
+    IterArray(ArrayIter<'a, 'a>),
     IterMap(MapIter<'a, 'a>),
 }
 
@@ -1142,7 +1123,7 @@ declare_types!(
     ///
     /// These are completely interchangeable in runtime and differ only in
     /// syntax representation, so we represent them as a single type.
-    Bytes(#[serde(borrow)] Cow<'a, [u8]> | Bytes | Bytes),
+    Bytes(#[serde(borrow)] Bytes<'a> | BytesExpr | BytesExpr),
 
     /// An Array of [`Type`].
     Array[CompoundType](#[serde(skip_deserializing)] Array<'a> | UninhabitedArray | UninhabitedArray),

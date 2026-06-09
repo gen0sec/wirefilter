@@ -1,7 +1,7 @@
-use regex_automata::MatchKind;
-
 use super::Error;
 use crate::{ParserSettings, RegexFormat};
+use regex_automata::MatchKind;
+use regex_automata::nfa::thompson::WhichCaptures;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -30,9 +30,10 @@ impl Regex {
             .utf8_empty(false)
             .dfa(false)
             .nfa_size_limit(Some(settings.regex_compiled_size_limit))
-            .onepass_size_limit(Some(settings.regex_compiled_size_limit))
+            .onepass(false)
             .dfa_size_limit(Some(settings.regex_compiled_size_limit))
             .hybrid_cache_capacity(settings.regex_dfa_size_limit)
+            .which_captures(WhichCaptures::Implicit)
     }
 
     /// Compiles a regular expression.
