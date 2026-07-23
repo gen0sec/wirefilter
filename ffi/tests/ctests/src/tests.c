@@ -759,7 +759,7 @@ void wirefilter_ffi_ctest_match_array()
 void wirefilter_ffi_ctest_add_function()
 {
     struct wirefilter_scheme_builder *builder = wirefilter_create_scheme_builder();
-    const char *function_name = "any";
+    const char *function_name = "concat";
 
     rust_assert(wirefilter_add_function_to_scheme(
                     builder,

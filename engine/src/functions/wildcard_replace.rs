@@ -145,7 +145,7 @@ fn wildcard_replace_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>>
             flags,
         ) => {
             let case_sensitive = match flags {
-                Some(Ok(LhsValue::Bytes(flags_raw))) => flags_raw.as_ref() == [b's'],
+                Some(Ok(LhsValue::Bytes(flags_raw))) => flags_raw.as_ref() == b"s",
                 None => false,
                 _ => unreachable!(),
             };
