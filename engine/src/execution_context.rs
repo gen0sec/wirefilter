@@ -242,6 +242,38 @@ impl<'e, U> ExecutionContext<'e, U> {
             .iter_mut()
             .for_each(|list_matcher| list_matcher.clear());
     }
+
+    /// Clears the context and re-labels it for a new borrow lifetime, so one
+    /// allocation can serve many inputs.
+    ///
+    /// [`Self::clear`] already keeps the allocation, but it cannot help a
+    /// caller in a loop: the context's `'e` is fixed to the data it was last
+    /// filled from, so the next input — borrowed from somewhere else — will
+    /// not typecheck against it. The practical consequence is that a
+    /// per-packet caller allocates a fresh context per packet, which for a
+    /// scheme of any size is the dominant cost of binding one:
+    ///
+    /// ```text
+    /// let mut spare = ExecutionContext::new(&scheme);   // ExecutionContext<'static>
+    /// for input in inputs {
+    ///     let mut ctx = spare.reset();                  // ExecutionContext<'input>
+    ///     ctx.set_field_value(field, &input.value)?;
+    ///     // ... execute filters against ctx ...
+    ///     spare = ctx.reset();                          // hand the allocation back
+    /// }
+    /// ```
+    #[inline]
+    pub fn reset<'b>(mut self) -> ExecutionContext<'b, U> {
+        self.clear();
+        // SAFETY: `clear` has just replaced every value with `None`, dropping
+        // each `LhsValue<'e>`, and cleared the list matchers. `scheme` is
+        // owned, `list_matchers` are `'static` trait objects and `user_data`
+        // is `U: 'static`-agnostic — none of them borrow from `'e`. With no
+        // reachable data borrowed from `'e`, re-labelling the lifetime cannot
+        // create a dangling reference. The two types differ only in that
+        // lifetime parameter, so they have identical layout.
+        unsafe { std::mem::transmute::<ExecutionContext<'e, U>, ExecutionContext<'b, U>>(self) }
+    }
 }
 
 /// Guard over a temporarily borrowed [`ExecutionContext`].
@@ -548,6 +580,39 @@ fn test_field_value_type_mismatch() {
             expected: Type::Int.into(),
             actual: Type::Bool,
         }))
+    );
+}
+
+#[test]
+fn test_reset_reuses_one_context_across_borrows() {
+    let scheme = Scheme! { name: Bytes }.build();
+    let field = scheme.get_field("name").unwrap();
+
+    // One allocation, handed from iteration to iteration. Each iteration
+    // borrows from a value that is dropped before the next one begins, which
+    // is the case `reset` exists to make expressible — and the case Miri
+    // would flag if the lifetime re-labelling were unsound.
+    let mut spare = ExecutionContext::<()>::new(&scheme);
+    for i in 0..4 {
+        let owned = format!("value{i}");
+        let mut ctx = spare.reset();
+        ctx.set_field_value(field, owned.as_bytes()).unwrap();
+        assert_eq!(
+            ctx.get_field_value(field),
+            Some(&LhsValue::Bytes(owned.as_bytes().into()))
+        );
+        spare = ctx.reset();
+        // `owned` dies here; `spare` must retain nothing that borrowed it.
+    }
+
+    // The recycled context is empty and still usable.
+    assert_eq!(spare.get_field_value(field), None);
+    let last = b"final".to_vec();
+    let mut ctx = spare.reset();
+    ctx.set_field_value(field, last.as_slice()).unwrap();
+    assert_eq!(
+        ctx.get_field_value(field),
+        Some(&LhsValue::Bytes(last.as_slice().into()))
     );
 }
 
