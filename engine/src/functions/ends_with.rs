@@ -1,6 +1,5 @@
 use std::iter;
 
-use crate::lhs_types::Bytes;
 use crate::{LhsValue, Type};
 
 use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
@@ -78,6 +77,7 @@ impl FunctionDefinition for EndsWithFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lhs_types::Bytes;
 
     #[test]
     fn test_ends_with_fn() {
