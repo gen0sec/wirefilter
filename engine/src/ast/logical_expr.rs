@@ -95,14 +95,14 @@ fn bool_array_type() -> Type {
 }
 
 impl QuantifierArgExpr {
-    fn walk<'a, V: Visitor<'a>>(&'a self, visitor: &mut V) {
+    pub(crate) fn walk<'a, V: Visitor<'a>>(&'a self, visitor: &mut V) {
         match self {
             Self::IndexExpr(index_expr) => visitor.visit_index_expr(index_expr),
             Self::Logical(logical_expr) => visitor.visit_logical_expr(logical_expr),
         }
     }
 
-    fn walk_mut<'a, V: VisitorMut<'a>>(&'a mut self, visitor: &mut V) {
+    pub(crate) fn walk_mut<'a, V: VisitorMut<'a>>(&'a mut self, visitor: &mut V) {
         match self {
             Self::IndexExpr(index_expr) => visitor.visit_index_expr(index_expr),
             Self::Logical(logical_expr) => visitor.visit_logical_expr(logical_expr),
@@ -206,10 +206,10 @@ impl LogicalExpr {
         }
     }
 
-    fn lex_quantifier_expr<'i>(
+    pub(crate) fn lex_quantifier<'i>(
         input: &'i str,
         parser: &FilterParser<'_>,
-    ) -> Option<LexResult<'i, Self>> {
+    ) -> Option<LexResult<'i, (QuantifierOp, Box<QuantifierArgExpr>)>> {
         let (op, rest) = QuantifierOp::lex_call(input)?;
         let nested_parser = match parser.with_increased_nesting(skip_space(rest)) {
             Ok(parser) => parser,
@@ -222,13 +222,7 @@ impl LogicalExpr {
             let (arg, input) = QuantifierArgExpr::lex_with(input, &nested_parser)?;
             let input = skip_space(input);
             let input = expect(input, ")")?;
-            Ok((
-                LogicalExpr::Quantifier {
-                    op,
-                    arg: Box::new(arg),
-                },
-                input,
-            ))
+            Ok(((op, Box::new(arg)), input))
         })())
     }
 
@@ -254,8 +248,9 @@ impl LogicalExpr {
                 },
                 input,
             )
-        } else if let Some(result) = Self::lex_quantifier_expr(input, parser) {
-            return result;
+        } else if let Some(result) = Self::lex_quantifier(input, parser) {
+            let ((op, arg), input) = result?;
+            (LogicalExpr::Quantifier { op, arg }, input)
         } else {
             let (op, input) = ComparisonExpr::lex_with(input, parser)?;
             (LogicalExpr::Comparison(op), input)

@@ -89,7 +89,7 @@ pub use self::ast::logical_expr::{
 };
 pub use self::ast::parse::{FilterParser, ParseError, ParserSettings};
 pub use self::ast::visitor::{Visitor, VisitorMut};
-pub use self::ast::{Expr, FilterAst, FilterValueAst, ValueExpr};
+pub use self::ast::{Expr, FilterAst, FilterValueAst, FilterValueExpr, ValueExpr};
 pub use self::compiler::{Compiler, DefaultCompiler};
 pub use self::execution_context::{
     ExecutionContext, ExecutionContextGuard, InvalidListMatcherError, SetFieldValueError,

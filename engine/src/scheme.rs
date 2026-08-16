@@ -1267,6 +1267,71 @@ fn test_parse_error() {
 }
 
 #[test]
+fn test_parse_quantifier_as_value() {
+    use crate::{Array, ExecutionContext, LhsValue};
+
+    let scheme = Scheme! {
+        values: Array(Bytes),
+    }
+    .build();
+    let ast = scheme
+        .parse_value(r#"any(values[*] in {"HIT" "UPDATE"})"#)
+        .unwrap();
+
+    assert_json!(scheme.parse_value("values").unwrap(), "values");
+    assert!(
+        scheme
+            .parse_value(r#"all(values[*] in {"HIT" "UPDATE"})"#)
+            .is_ok()
+    );
+
+    assert_eq!(ast.get_type(), Type::Bool);
+    assert_json!(
+        ast,
+        {
+            "op": "Any",
+            "arg": {
+                "kind": "SimpleExpr",
+                "value": {
+                    "lhs": ["values", { "kind": "MapEach" }],
+                    "op": "OneOf",
+                    "rhs": ["HIT", "UPDATE"]
+                }
+            }
+        }
+    );
+
+    let mut ctx = ExecutionContext::new(&scheme);
+    ctx.set_field_value(
+        scheme.get_field("values").unwrap(),
+        Array::from_iter(["MISS", "HIT"]),
+    )
+    .unwrap();
+    assert_eq!(ast.compile().execute(&ctx), Ok(Ok(LhsValue::Bool(true))));
+}
+
+#[test]
+fn test_parse_value_rejects_non_quantifier_logical_expressions() {
+    let scheme = Scheme! {
+        values: Array(Bytes),
+    }
+    .build();
+
+    for input in [
+        // LogicalExpr::Comparison
+        r#"values[0] == "HIT""#,
+        // LogicalExpr::Parenthesized
+        r#"(any(values[*] == "HIT"))"#,
+        // LogicalExpr::Unary
+        r#"not any(values[*] == "HIT")"#,
+        // LogicalExpr::Combining
+        r#"any(values[*] == "HIT") and any(values[*] == "UPDATE")"#,
+    ] {
+        assert!(scheme.parse_value(input).is_err(), "parsed {input:?}");
+    }
+}
+
+#[test]
 fn test_parse_error_in_op() {
     use cidr::errors::NetworkParseError;
     use indoc::indoc;
