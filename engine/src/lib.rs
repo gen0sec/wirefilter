@@ -84,7 +84,9 @@ pub use self::ast::field_expr::{
 };
 pub use self::ast::function_expr::{FunctionCallArgExpr, FunctionCallExpr};
 pub use self::ast::index_expr::{Compare, IndexExpr};
-pub use self::ast::logical_expr::{LogicalExpr, LogicalOp, ParenthesizedExpr, UnaryOp};
+pub use self::ast::logical_expr::{
+    LogicalExpr, LogicalOp, ParenthesizedExpr, QuantifierArgExpr, QuantifierOp, UnaryOp,
+};
 pub use self::ast::parse::{FilterParser, ParseError, ParserSettings};
 pub use self::ast::visitor::{Visitor, VisitorMut};
 pub use self::ast::{Expr, FilterAst, FilterValueAst, ValueExpr};
@@ -96,14 +98,14 @@ pub use self::filter::{
     CompiledExpr, CompiledOneExpr, CompiledValueExpr, CompiledVecExpr, Filter, FilterValue,
 };
 pub use self::functions::{
-    AllFunction, AnyFunction, CIDRFunction, CompiledFunction, ConcatFunction, DecodeBase64Function,
-    EndsWithFunction, FunctionArgInvalidConstantError, FunctionArgKind,
-    FunctionArgKindMismatchError, FunctionArgs, FunctionDefinition, FunctionDefinitionContext,
-    FunctionParam, FunctionParamError, JsonLookupIntegerFunction, JsonLookupStringFunction,
-    LenFunction, LowerFunction, RegexReplaceFunction, RemoveBytesFunction, RemoveQueryArgsFunction,
-    SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionOptParam,
-    SimpleFunctionParam, StartsWithFunction, SubstringFunction, ToStringFunction, UUID4Function,
-    UpperFunction, UrlDecodeFunction, WildcardReplaceFunction,
+    CIDRFunction, CompiledFunction, ConcatFunction, DecodeBase64Function, EndsWithFunction,
+    FunctionArgInvalidConstantError, FunctionArgKind, FunctionArgKindMismatchError, FunctionArgs,
+    FunctionDefinition, FunctionDefinitionContext, FunctionParam, FunctionParamError,
+    JsonLookupIntegerFunction, JsonLookupStringFunction, LenFunction, LowerFunction,
+    RegexReplaceFunction, RemoveBytesFunction, RemoveQueryArgsFunction, SimpleFunctionArgKind,
+    SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionOptParam, SimpleFunctionParam,
+    StartsWithFunction, SubstringFunction, ToStringFunction, UUID4Function, UpperFunction,
+    UrlDecodeFunction, WildcardReplaceFunction,
 };
 pub use self::lex::LexErrorKind;
 pub use self::lhs_types::{Array, Bytes, Map, MapIter, TypedArray, TypedMap};

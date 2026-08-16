@@ -16,11 +16,11 @@ use std::io::{self, Write};
 use std::net::IpAddr;
 use std::ops::{Deref, DerefMut};
 use wirefilter::{
-    AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, DecodeBase64Function,
-    EndsWithFunction, GetType, JsonLookupIntegerFunction, JsonLookupStringFunction, LenFunction,
-    LowerFunction, NeverList, RegexReplaceFunction, RemoveBytesFunction, RemoveQueryArgsFunction,
-    StartsWithFunction, SubstringFunction, ToStringFunction, Type, UUID4Function, UpperFunction,
-    UrlDecodeFunction, WildcardReplaceFunction, catch_panic,
+    AlwaysList, CIDRFunction, ConcatFunction, DecodeBase64Function, EndsWithFunction, GetType,
+    JsonLookupIntegerFunction, JsonLookupStringFunction, LenFunction, LowerFunction, NeverList,
+    RegexReplaceFunction, RemoveBytesFunction, RemoveQueryArgsFunction, StartsWithFunction,
+    SubstringFunction, ToStringFunction, Type, UUID4Function, UpperFunction, UrlDecodeFunction,
+    WildcardReplaceFunction, catch_panic,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -308,20 +308,6 @@ pub extern "C" fn wirefilter_add_function_to_scheme(
 
     match name {
         "concat" => match builder.add_function(name, ConcatFunction::default()) {
-            Ok(_) => true,
-            Err(err) => {
-                write_last_error!("{}", err);
-                false
-            }
-        },
-        "any" => match builder.add_function(name, AnyFunction::default()) {
-            Ok(_) => true,
-            Err(err) => {
-                write_last_error!("{}", err);
-                false
-            }
-        },
-        "all" => match builder.add_function(name, AllFunction::default()) {
             Ok(_) => true,
             Err(err) => {
                 write_last_error!("{}", err);

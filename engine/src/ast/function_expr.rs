@@ -2,9 +2,9 @@ use super::ValueExpr;
 use super::parse::FilterParser;
 use super::visitor::{Visitor, VisitorMut};
 use crate::FunctionRef;
-use crate::ast::field_expr::{ComparisonExpr, ComparisonOp, ComparisonOpExpr};
+use crate::ast::field_expr::{ComparisonExpr, ComparisonOp, ComparisonOpExpr, IdentifierExpr};
 use crate::ast::index_expr::IndexExpr;
-use crate::ast::logical_expr::{LogicalExpr, UnaryOp};
+use crate::ast::logical_expr::{LogicalExpr, QuantifierOp, UnaryOp};
 use crate::compiler::Compiler;
 use crate::filter::{CompiledExpr, CompiledValueExpr, CompiledValueResult};
 use crate::functions::{
@@ -89,6 +89,20 @@ impl FunctionCallArgExpr {
         }
     }
 
+    /// Returns `true` if re-evaluating this argument for every mapped element
+    /// could be costly, i.e. it is a nested function call or a logical
+    /// sub-expression. Literals and plain field accesses are cheap to evaluate
+    /// repeatedly, so memoizing them would only add overhead.
+    fn is_expensive_to_reevaluate(&self) -> bool {
+        match self {
+            FunctionCallArgExpr::Literal(_) => false,
+            FunctionCallArgExpr::Logical(_) => true,
+            FunctionCallArgExpr::IndexExpr(index_expr) => {
+                matches!(index_expr.identifier, IdentifierExpr::FunctionCallExpr(_))
+            }
+        }
+    }
+
     #[allow(dead_code)]
     pub(crate) fn simplify(self) -> Self {
         match self {
@@ -129,7 +143,10 @@ impl<'i, 's> LexWith<'i, &FilterParser<'s>> for FunctionCallArgExpr {
             if c == '"' || (c == 'r' && (c2 == Some('#') || c2 == Some('"'))) {
                 return RhsValue::lex_with(input, Type::Bytes)
                     .map(|(literal, input)| (FunctionCallArgExpr::Literal(literal), input));
-            } else if c == '(' || UnaryOp::lex(input).is_ok() {
+            } else if c == '('
+                || UnaryOp::lex(input).is_ok()
+                || QuantifierOp::lex_call(input).is_some()
+            {
                 return LogicalExpr::lex_with(input, parser)
                     .map(|(lhs, input)| (FunctionCallArgExpr::Logical(lhs), input));
             } else if c_is_field!(c)
@@ -263,6 +280,16 @@ impl ValueExpr for FunctionCallExpr {
         let call = function
             .as_definition()
             .compile(&mut args.iter().map(|arg| arg.into()), context);
+        // For `map_each`, only bother evaluating the non-mapped arguments once
+        // (instead of once per element) when at least one of them is expensive
+        // to re-evaluate. For trivial arguments (literals / plain field
+        // accesses) inline re-evaluation is just as cheap and avoids a
+        // per-call allocation.
+        let memoize_extra_args = map_each_count > 0
+            && args
+                .iter()
+                .skip(1)
+                .any(FunctionCallArgExpr::is_expensive_to_reevaluate);
         let mut args = args
             .into_iter()
             .map(|arg| compiler.compile_function_call_arg_expr(arg))
@@ -278,27 +305,38 @@ impl ValueExpr for FunctionCallExpr {
                 return_type: Type,
                 f: impl Fn(LhsValue<'a>) -> I,
             ) -> CompiledValueResult<'a> {
-                let mut first = match first {
+                let first = match first {
                     Ok(first) => first,
                     Err(_) => {
                         return Err(Type::Array(return_type.into()));
                     }
                 };
-                // Extract the values of the map
-                if let LhsValue::Map(map) = first {
-                    first = LhsValue::Array(
-                        Array::try_from_iter(map.value_type(), map.into_values()).unwrap(),
-                    );
-                }
-                // Retrieve the underlying `Array`
-                let mut first = match first {
-                    LhsValue::Array(arr) => arr,
+                let result = match first {
+                    // Map the values straight into the result array. This avoids
+                    // the intermediate `Array` allocation (and per-element type
+                    // re-check) that a separate map -> array conversion followed
+                    // by `filter_map_to` would incur.
+                    LhsValue::Map(map) => {
+                        // Reserve up front for the whole map: `filter_map`'s
+                        // `size_hint` lower bound is 0, and `map_each` rarely
+                        // filters, so this avoids repeated reallocations.
+                        let len = map.len();
+                        Array::try_from_iter_with_capacity(
+                            return_type,
+                            len,
+                            map.into_values().filter_map(|elem| call(&mut f(elem))),
+                        )
+                        .unwrap()
+                    }
+                    LhsValue::Array(mut arr) => {
+                        if !arr.is_empty() {
+                            arr = arr.filter_map_to(return_type, |elem| call(&mut f(elem)));
+                        }
+                        arr
+                    }
                     _ => unreachable!(),
                 };
-                if !first.is_empty() {
-                    first = first.filter_map_to(return_type, |elem| call(&mut f(elem)));
-                }
-                Ok(LhsValue::Array(first))
+                Ok(LhsValue::Array(result))
             }
 
             if args.is_empty() {
@@ -309,6 +347,21 @@ impl ValueExpr for FunctionCallExpr {
                         return_type,
                         #[inline]
                         |elem| once(Ok(elem)),
+                    )
+                })
+            } else if memoize_extra_args {
+                CompiledValueExpr::new(move |ctx| {
+                    // At least one non-mapped argument is expensive to
+                    // re-evaluate, so evaluate all of them once per call and
+                    // reuse them (cheaply cloned) for every element instead of
+                    // re-executing the argument expressions for every element.
+                    let extra_args = args.iter().map(|arg| arg.execute(ctx)).collect::<Vec<_>>();
+                    compute(
+                        first.execute(ctx),
+                        &call,
+                        return_type,
+                        #[inline]
+                        |elem| ExactSizeChain::new(once(Ok(elem)), extra_args.iter().cloned()),
                     )
                 })
             } else {
@@ -521,7 +574,9 @@ mod tests {
     use super::*;
     use crate::SimpleFunctionArgKind;
     use crate::ast::field_expr::{ComparisonExpr, ComparisonOpExpr, IdentifierExpr, OrderingOp};
-    use crate::ast::logical_expr::{LogicalExpr, LogicalOp, ParenthesizedExpr};
+    use crate::ast::logical_expr::{
+        LogicalExpr, LogicalOp, ParenthesizedExpr, QuantifierArgExpr, QuantifierOp,
+    };
     use crate::ast::parse::FilterParser;
     use crate::functions::{
         FunctionArgKind, FunctionArgKindMismatchError, FunctionArgs, SimpleFunctionDefinition,
@@ -532,19 +587,6 @@ mod tests {
     use crate::types::{RhsValues, Type, TypeMismatchError};
     use std::convert::TryFrom;
     use std::sync::LazyLock;
-
-    fn any_function<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
-        match args.next()? {
-            Ok(v) => Some(LhsValue::Bool(
-                Array::try_from(v)
-                    .unwrap()
-                    .into_iter()
-                    .any(|lhs| bool::try_from(lhs).unwrap()),
-            )),
-            Err(Type::Array(ref arr)) if arr.get_type() == Type::Bool => None,
-            _ => unreachable!(),
-        }
-    }
 
     fn regex_replace<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
         args.next()?.ok()
@@ -595,7 +637,7 @@ mod tests {
         parser.set_max_nesting_depth(1);
 
         assert_err!(
-            parser.lex_as::<FunctionCallExpr>(
+            parser.lex_as::<LogicalExpr>(
                 "any ( ( http.request.headers.is_empty or http.request.headers.is_empty ) )"
             ),
             LexErrorKind::NestingLimitExceeded { limit: 1 },
@@ -622,20 +664,6 @@ mod tests {
             ssl: Bool,
             tcp.port: Int,
         };
-        builder
-            .add_function(
-                "any",
-                SimpleFunctionDefinition {
-                    params: vec![SimpleFunctionParam {
-                        arg_kind: SimpleFunctionArgKind::Field,
-                        val_type: Type::Array(Type::Bool.into()),
-                    }],
-                    opt_params: vec![],
-                    return_type: Type::Bool,
-                    implementation: SimpleFunctionImpl::new(any_function),
-                },
-            )
-            .unwrap();
         builder
             .add_function(
                 "echo",
@@ -908,9 +936,9 @@ mod tests {
             FilterParser::new(&SCHEME).lex_as(
                 r#"any ( ( http.request.headers.is_empty or http.request.headers.is_empty ) )"#
             ),
-            FunctionCallExpr {
-                function: SCHEME.get_function("any").unwrap().to_owned(),
-                args: vec![FunctionCallArgExpr::Logical(LogicalExpr::Parenthesized(
+            LogicalExpr::Quantifier {
+                op: QuantifierOp::Any,
+                arg: Box::new(QuantifierArgExpr::Logical(LogicalExpr::Parenthesized(
                     Box::new(ParenthesizedExpr {
                         expr: LogicalExpr::Combining {
                             op: LogicalOp::Or,
@@ -942,37 +970,33 @@ mod tests {
                             ]
                         }
                     })
-                ))],
-                context: None,
+                ))),
             },
             ""
         );
 
-        assert_eq!(expr.return_type(), Type::Bool);
         assert_eq!(expr.get_type(), Type::Bool);
 
         assert_json!(
             expr,
             {
-                "name": "any",
-                "args": [
-                    {
-                        "kind": "SimpleExpr",
-                        "value": {
-                            "items": [
-                                {
-                                    "lhs": "http.request.headers.is_empty",
-                                    "op": "IsTrue",
-                                },
-                                {
-                                    "lhs": "http.request.headers.is_empty",
-                                    "op": "IsTrue",
-                                }
-                            ],
-                            "op": "Or",
-                        }
+                "op": "Any",
+                "arg": {
+                    "kind": "SimpleExpr",
+                    "value": {
+                        "items": [
+                            {
+                                "lhs": "http.request.headers.is_empty",
+                                "op": "IsTrue",
+                            },
+                            {
+                                "lhs": "http.request.headers.is_empty",
+                                "op": "IsTrue",
+                            }
+                        ],
+                        "op": "Or",
                     }
-                ]
+                }
             }
         );
 
@@ -1064,9 +1088,9 @@ mod tests {
         let expr = assert_ok!(
             FilterParser::new(&SCHEME)
                 .lex_as("any(lower(http.request.headers.names[*])[*] contains \"c\")"),
-            FunctionCallExpr {
-                function: SCHEME.get_function("any").unwrap().to_owned(),
-                args: vec![FunctionCallArgExpr::Logical(LogicalExpr::Comparison(
+            LogicalExpr::Quantifier {
+                op: QuantifierOp::Any,
+                arg: Box::new(QuantifierArgExpr::Logical(LogicalExpr::Comparison(
                     ComparisonExpr {
                         lhs: IndexExpr {
                             identifier: IdentifierExpr::FunctionCallExpr(FunctionCallExpr {
@@ -1086,41 +1110,37 @@ mod tests {
                         },
                         op: ComparisonOpExpr::Contains("c".to_string().into(),)
                     }
-                ))],
-                context: None,
+                ))),
             },
             ""
         );
 
-        assert_eq!(expr.return_type(), Type::Bool);
         assert_eq!(expr.get_type(), Type::Bool);
 
         assert_json!(
             expr,
             {
-                "args": [
-                    {
-                        "kind": "SimpleExpr",
-                        "value": {
-                            "lhs": [
-                                {
-                                    "args": [
-                                        {
-                                            "kind": "IndexExpr",
-                                            "value": ["http.request.headers.names", {"kind": "MapEach"}]
-                                        }
-                                    ],
-                                    "name": "lower"
-                                },{
-                                    "kind": "MapEach"
-                                }
-                            ],
-                            "op": "Contains",
-                            "rhs": "c"
-                        }
+                "op": "Any",
+                "arg": {
+                    "kind": "SimpleExpr",
+                    "value": {
+                        "lhs": [
+                            {
+                                "args": [
+                                    {
+                                        "kind": "IndexExpr",
+                                        "value": ["http.request.headers.names", {"kind": "MapEach"}]
+                                    }
+                                ],
+                                "name": "lower"
+                            },{
+                                "kind": "MapEach"
+                            }
+                        ],
+                        "op": "Contains",
+                        "rhs": "c"
                     }
-                ],
-                "name": "any"
+                }
             }
         );
 
@@ -1158,9 +1178,9 @@ mod tests {
         let expr = assert_ok!(
             FilterParser::new(&SCHEME)
                 .lex_as("any(not(http.request.headers.names[*] in {\"Cookie\" \"Cookies\"}))"),
-            FunctionCallExpr {
-                function: SCHEME.get_function("any").unwrap().to_owned(),
-                args: vec![FunctionCallArgExpr::Logical(LogicalExpr::Unary {
+            LogicalExpr::Quantifier {
+                op: QuantifierOp::Any,
+                arg: Box::new(QuantifierArgExpr::Logical(LogicalExpr::Unary {
                     op: UnaryOp::Not,
                     arg: Box::new(LogicalExpr::Parenthesized(Box::new(ParenthesizedExpr {
                         expr: LogicalExpr::Comparison(ComparisonExpr {
@@ -1179,49 +1199,45 @@ mod tests {
                             ])),
                         })
                     },)))
-                })],
-                context: None,
+                })),
             },
             ""
         );
 
-        assert_eq!(expr.return_type(), Type::Bool);
         assert_eq!(expr.get_type(), Type::Bool);
 
         assert_json!(
             expr,
             {
-                "name": "any",
-                "args": [
-                    {
-                        "kind": "SimpleExpr",
-                        "value": {
-                            "op": "Not",
-                            "arg": {
-                                "lhs": [
-                                    "http.request.headers.names",
-                                    {
-                                        "kind": "MapEach"
-                                    }
-                                ],
-                                "op": "OneOf",
-                                "rhs": [
-                                    "Cookie",
-                                    "Cookies"
-                                ]
-                            }
+                "op": "Any",
+                "arg": {
+                    "kind": "SimpleExpr",
+                    "value": {
+                        "op": "Not",
+                        "arg": {
+                            "lhs": [
+                                "http.request.headers.names",
+                                {
+                                    "kind": "MapEach"
+                                }
+                            ],
+                            "op": "OneOf",
+                            "rhs": [
+                                "Cookie",
+                                "Cookies"
+                            ]
                         }
                     }
-                ]
+                }
             }
         );
 
         let expr = assert_ok!(
             FilterParser::new(&SCHEME)
                 .lex_as("any(!(http.request.headers.names[*] in {\"Cookie\" \"Cookies\"}))"),
-            FunctionCallExpr {
-                function: SCHEME.get_function("any").unwrap().to_owned(),
-                args: vec![FunctionCallArgExpr::Logical(LogicalExpr::Unary {
+            LogicalExpr::Quantifier {
+                op: QuantifierOp::Any,
+                arg: Box::new(QuantifierArgExpr::Logical(LogicalExpr::Unary {
                     op: UnaryOp::Not,
                     arg: Box::new(LogicalExpr::Parenthesized(Box::new(ParenthesizedExpr {
                         expr: LogicalExpr::Comparison(ComparisonExpr {
@@ -1240,40 +1256,36 @@ mod tests {
                             ])),
                         })
                     },)))
-                })],
-                context: None,
+                })),
             },
             ""
         );
 
-        assert_eq!(expr.return_type(), Type::Bool);
         assert_eq!(expr.get_type(), Type::Bool);
 
         assert_json!(
             expr,
             {
-                "name": "any",
-                "args": [
-                    {
-                        "kind": "SimpleExpr",
-                        "value": {
-                            "op": "Not",
-                            "arg": {
-                                "lhs": [
-                                    "http.request.headers.names",
-                                    {
-                                        "kind": "MapEach"
-                                    }
-                                ],
-                                "op": "OneOf",
-                                "rhs": [
-                                    "Cookie",
-                                    "Cookies"
-                                ]
-                            }
+                "op": "Any",
+                "arg": {
+                    "kind": "SimpleExpr",
+                    "value": {
+                        "op": "Not",
+                        "arg": {
+                            "lhs": [
+                                "http.request.headers.names",
+                                {
+                                    "kind": "MapEach"
+                                }
+                            ],
+                            "op": "OneOf",
+                            "rhs": [
+                                "Cookie",
+                                "Cookies"
+                            ]
                         }
                     }
-                ]
+                }
             }
         );
     }
