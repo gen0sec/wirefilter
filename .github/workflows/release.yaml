@@ -8,6 +8,13 @@ on:
         description: 'Run cargo publish with --dry-run (skips registry push and GH release)'
         type: boolean
         default: false
+      image-version:
+        description: >-
+          Build and push the FFI image under this version, without touching the
+          crate. Use it to publish an image for a tag that was released before
+          this job existed. Leave blank to skip the image entirely.
+        type: string
+        default: ''
 
 jobs:
   verify-version:
@@ -106,3 +113,137 @@ jobs:
           generate_release_notes: true
           files: release-assets/*
           make_latest: true
+
+  # The FFI shared library as a container image, so consumers stop cloning this
+  # repo and building it themselves at a commit they name by hand.
+  #
+  # Multi-arch, because the consumers build for both. Pushed per architecture by
+  # digest and then merged into one index -- a single manifest per arch cannot
+  # be tagged with the same name twice without the second clobbering the first.
+  ffi-image:
+    needs: [verify-version]
+    # Runs on a version tag, or on a manual dispatch that names a version. The
+    # second exists because 0.7.4 shipped before this job did, and its image has
+    # to be publishable without inventing a crate release to carry it.
+    if: >-
+      ${{ always() && !cancelled()
+          && (startsWith(github.ref, 'refs/tags/v') || inputs.image-version != '')
+          && inputs.dry-run != true }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Native runners per architecture: this is a Rust release build, and
+          # under QEMU it takes long enough to hit the job timeout.
+          - platform: linux/amd64
+            slug: linux-amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            slug: linux-arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/wirefilter,push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+          cache-from: type=gha,scope=ffi-${{ matrix.slug }}
+          cache-to: type=gha,mode=max,scope=ffi-${{ matrix.slug }}
+      - name: Record the per-arch digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          SLUG: ${{ matrix.slug }}
+        run: |
+          set -euo pipefail
+          # An empty digest does not fail the merge below, it makes the merge
+          # publish an index one architecture short -- so it fails here instead.
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::$SLUG: build produced no usable digest (got '$DIGEST')"
+            exit 1
+          fi
+          mkdir -p digests
+          printf '%s' "$DIGEST" > "digests/$SLUG"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ffi-digest-${{ matrix.slug }}
+          path: digests/${{ matrix.slug }}
+          if-no-files-found: error
+          retention-days: 7
+
+  ffi-image-index:
+    needs: [verify-version, ffi-image]
+    if: ${{ !cancelled() && needs.ffi-image.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: ffi-digest-*
+          merge-multiple: true
+          path: digests
+      - name: Create the multi-arch index
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/wirefilter
+          # The tag version, or the one named by a manual dispatch.
+          VERSION: ${{ needs.verify-version.outputs.version || inputs.image-version }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$VERSION" ]; then
+            echo "::error::no version to tag the index with"
+            exit 1
+          fi
+
+          refs=()
+          for slug in linux-amd64 linux-arm64; do
+            f="digests/$slug"
+            if [ ! -f "$f" ]; then
+              echo "::error::no digest recorded for $slug"
+              exit 1
+            fi
+            d="$(tr -d '[:space:]' < "$f")"
+            if [[ ! "$d" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::the $slug digest is malformed ('$d')"
+              exit 1
+            fi
+            refs+=("$IMAGE@$d")
+          done
+
+          # Version first: it is the tag consumers pin, and the one that must
+          # exist even if anything below fails.
+          docker buildx imagetools create -t "$IMAGE:$VERSION" "${refs[@]}"
+          docker buildx imagetools create -t "$IMAGE:$SHA" "${refs[@]}"
+
+          # Print the index digest so a consumer can pin it rather than the tag,
+          # which is the whole point of publishing this properly.
+          docker buildx imagetools inspect --format '{{println .Manifest.Digest}}' "$IMAGE:$VERSION"
+          {
+            echo "### FFI image"
+            echo
+            echo '```'
+            echo "$IMAGE:$VERSION"
+            echo "$IMAGE:$VERSION@$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$IMAGE:$VERSION")"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
