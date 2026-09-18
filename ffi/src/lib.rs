@@ -18,7 +18,7 @@ use std::ops::{Deref, DerefMut};
 use wirefilter::{
     AllFunction, AlwaysList, AnyFunction, CIDRFunction, ConcatFunction, DecodeBase64Function,
     EndsWithFunction, GetType, JsonLookupIntegerFunction, JsonLookupStringFunction, LenFunction,
-    LowerFunction, NeverList, RemoveBytesFunction, RemoveQueryArgsFunction,
+    LowerFunction, NeverList, RegexReplaceFunction, RemoveBytesFunction, RemoveQueryArgsFunction,
     StartsWithFunction, SubstringFunction, ToStringFunction, Type, UUID4Function, UpperFunction,
     UrlDecodeFunction, WildcardReplaceFunction, catch_panic,
 };
@@ -350,6 +350,13 @@ pub extern "C" fn wirefilter_add_function_to_scheme(
             }
         },
         "len" => match builder.add_function(name, LenFunction::default()) {
+            Ok(_) => true,
+            Err(err) => {
+                write_last_error!("{}", err);
+                false
+            }
+        },
+        "regex_replace" => match builder.add_function(name, RegexReplaceFunction::default()) {
             Ok(_) => true,
             Err(err) => {
                 write_last_error!("{}", err);
