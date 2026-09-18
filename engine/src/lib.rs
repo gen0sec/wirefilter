@@ -100,7 +100,7 @@ pub use self::functions::{
     FunctionArgInvalidConstantError, FunctionArgKind, FunctionArgKindMismatchError, FunctionArgs,
     FunctionDefinition, FunctionDefinitionContext, FunctionParam, FunctionParamError,
     JsonLookupIntegerFunction, JsonLookupStringFunction, LenFunction, LowerFunction,
-    RemoveBytesFunction, RemoveQueryArgsFunction, SimpleFunctionArgKind,
+    RegexReplaceFunction, RemoveBytesFunction, RemoveQueryArgsFunction, SimpleFunctionArgKind,
     SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionOptParam, SimpleFunctionParam,
     StartsWithFunction, SubstringFunction, ToStringFunction, UUID4Function, UpperFunction,
     UrlDecodeFunction, WildcardReplaceFunction,

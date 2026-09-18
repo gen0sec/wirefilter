@@ -9,8 +9,8 @@
 
 use wirefilter::{
     ConcatFunction, EndsWithFunction, ExecutionContext, JsonLookupIntegerFunction,
-    JsonLookupStringFunction, LowerFunction, RemoveQueryArgsFunction, SchemeBuilder,
-    StartsWithFunction, ToStringFunction, Type, UpperFunction,
+    JsonLookupStringFunction, LowerFunction, RegexReplaceFunction, RemoveQueryArgsFunction,
+    SchemeBuilder, StartsWithFunction, ToStringFunction, Type, UpperFunction,
 };
 
 /// Registers every publicly exported function under its Cloudflare-compatible
@@ -32,6 +32,7 @@ fn scheme_with_all_functions() -> wirefilter::Scheme {
     b.add_function("concat", ConcatFunction::default()).unwrap();
     b.add_function("starts_with", StartsWithFunction::default()).unwrap();
     b.add_function("ends_with", EndsWithFunction::default()).unwrap();
+    b.add_function("regex_replace", RegexReplaceFunction::default()).unwrap();
     b.build()
 }
 
@@ -109,4 +110,16 @@ fn upper_and_lower_and_to_string_round_trip() {
     assert!(eval(r#"upper(lookup_json_string(body, "k")) == "ABC""#, r#"{"k":"abc"}"#));
     assert!(eval(r#"lower(lookup_json_string(body, "k")) == "abc""#, r#"{"k":"ABC"}"#));
     assert!(eval(r#"to_string(n) == "7""#, "{}"));
+}
+
+#[test]
+fn regex_replace_rewrites_the_first_match() {
+    assert!(eval(r#"regex_replace(query, "^a=([0-9])", "x=${1}") == "x=1&b=2""#, "{}"));
+    assert!(eval(r#"regex_replace(query, "[0-9]", "N") == "a=N&b=2""#, "{}"));
+}
+
+#[test]
+fn regex_replace_rejects_an_invalid_pattern_when_parsing() {
+    let scheme = scheme_with_all_functions();
+    assert!(scheme.parse(r#"regex_replace(query, "(", "x") == "y""#).is_err());
 }
