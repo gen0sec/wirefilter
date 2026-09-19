@@ -1303,7 +1303,7 @@ dependencies = [
 
 [[package]]
 name = "wirefilter-engine"
-version = "0.7.4"
+version = "0.7.5"
 dependencies = [
  "backtrace",
  "base64",
@@ -1330,7 +1330,7 @@ dependencies = [
 
 [[package]]
 name = "wirefilter-ffi"
-version = "0.7.4"
+version = "0.7.5"
 dependencies = [
  "cbindgen",
  "fnv",
