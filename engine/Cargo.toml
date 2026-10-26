@@ -25,6 +25,7 @@ harness = false
 name = "bench"
 
 [dependencies]
+arcstr.workspace = true
 backtrace.workspace = true
 base64.workspace = true
 cfg-if.workspace = true

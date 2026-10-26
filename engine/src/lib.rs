@@ -80,7 +80,8 @@ mod strict_partial_ord;
 mod types;
 
 pub use self::ast::field_expr::{
-    ComparisonExpr, ComparisonOpExpr, IdentifierExpr, IntOp, OrderingOp,
+    ComparisonExpr, ComparisonOpExpr, ComparisonRhs, IdentifierExpr, IntOp, IntRhs, OrderingOp,
+    ScalarExpr, ScalarIntExpr,
 };
 pub use self::ast::function_expr::{FunctionCallArgExpr, FunctionCallExpr};
 pub use self::ast::index_expr::{Compare, IndexExpr};
@@ -121,10 +122,10 @@ pub use self::rhs_types::{
 };
 pub use self::scheme::{
     Field, FieldIndex, FieldRedefinitionError, FieldRef, Function, FunctionRedefinitionError,
-    FunctionRef, IdentifierRedefinitionError, IndexAccessError, List, ListRef, Scheme,
-    SchemeBuilder, SchemeMismatchError, UnknownFieldError,
+    FunctionRef, IdentifierRedefinitionError, IdentifierRegistrationError, IndexAccessError, List,
+    ListRef, Scheme, SchemeBuilder, SchemeMismatchError, UnknownFieldError,
 };
 pub use self::types::{
-    CompoundType, ExpectedType, ExpectedTypeList, GetType, LhsValue, RhsValue, RhsValues, Type,
-    TypeMismatchError,
+    CompoundType, ExpectedType, ExpectedTypeList, GetType, LhsValue, LiteralSet, LiteralValue,
+    Type, TypeMismatchError,
 };

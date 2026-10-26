@@ -2,7 +2,7 @@ use super::{FunctionArgKind, FunctionArgs, FunctionDefinition};
 use crate::lhs_types::Bytes;
 use crate::{LhsValue, Type};
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use std::iter;
 
 /// Generates a random UUIDv4 (Universally Unique Identifier, version 4) based on the given argument (a source of randomness).

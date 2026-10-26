@@ -3,7 +3,7 @@ use crate::ast::{FilterAst, FilterValueAst};
 use crate::functions::FunctionDefinition;
 use crate::lex::{Lex, LexErrorKind, LexResult, LexWith, expect, span, take_while};
 use crate::list_matcher::ListDefinition;
-use crate::types::{GetType, RhsValue, Type};
+use crate::types::{GetType, LiteralValue, Type};
 use fnv::FnvBuildHasher;
 use serde::de::Visitor;
 use serde::ser::SerializeMap;
@@ -41,7 +41,7 @@ pub enum FieldIndex {
     ArrayIndex(u32),
 
     /// Key into a Map
-    MapKey(String),
+    MapKey(Box<str>),
 
     /// Map each element by applying a function or a comparison
     MapEach,
@@ -56,9 +56,9 @@ impl<'i> Lex<'i> for FieldIndex {
         // The token inside an [] can be either an integer index into an Array
         // or a string key into a Map. The token is a key into a Map if it
         // starts and ends with "\"", otherwise an integer index or an error.
-        let (rhs, rest) = match expect(input, "\"") {
-            Ok(_) => RhsValue::lex_with(input, Type::Bytes),
-            Err(_) => RhsValue::lex_with(input, Type::Int).map_err(|_| {
+        let (literal, rest) = match expect(input, "\"") {
+            Ok(_) => LiteralValue::lex_with(input, Type::Bytes),
+            Err(_) => LiteralValue::lex_with(input, Type::Int).map_err(|_| {
                 (
                     LexErrorKind::ExpectedLiteral(
                         "expected quoted utf8 string or positive integer",
@@ -68,24 +68,22 @@ impl<'i> Lex<'i> for FieldIndex {
             }),
         }?;
 
-        match rhs {
-            RhsValue::Int(i) => match u32::try_from(i) {
+        match literal {
+            LiteralValue::Int(i) => match u32::try_from(i) {
                 Ok(u) => Ok((FieldIndex::ArrayIndex(u), rest)),
                 Err(_) => Err((
                     LexErrorKind::ExpectedLiteral("expected positive integer as index"),
                     input,
                 )),
             },
-            RhsValue::Bytes(b) => {
-                match simdutf8::basic::from_utf8(&b) {
-                    Ok(_) => {
-                        // SAFETY: simdutf8 just validated the bytes as valid UTF-8.
-                        let s = unsafe { String::from_utf8_unchecked(b.into()) };
-                        Ok((FieldIndex::MapKey(s), rest))
-                    }
-                    Err(_) => Err((LexErrorKind::ExpectedLiteral("expected utf8 string"), input)),
+            LiteralValue::Bytes(b) => match simdutf8::basic::from_utf8(&b) {
+                Ok(_) => {
+                    // SAFETY: simdutf8 just validated the bytes as valid UTF-8.
+                    let s = unsafe { String::from_utf8_unchecked(b.into()) };
+                    Ok((FieldIndex::MapKey(s.into_boxed_str()), rest))
                 }
-            }
+                Err(_) => Err((LexErrorKind::ExpectedLiteral("expected utf8 string"), input)),
+            },
             _ => unreachable!(),
         }
     }
@@ -432,22 +430,8 @@ pub(crate) enum Identifier<'s> {
 }
 
 impl<'i, 's> LexWith<'i, &'s Scheme> for Identifier<'s> {
-    fn lex_with(mut input: &'i str, scheme: &'s Scheme) -> LexResult<'i, Self> {
-        let initial_input = input;
-
-        loop {
-            input = take_while(input, "identifier character", |c| {
-                c.is_ascii_alphanumeric() || c == '_'
-            })?
-            .1;
-
-            match expect(input, ".") {
-                Ok(rest) => input = rest,
-                Err(_) => break,
-            };
-        }
-
-        let name = span(initial_input, input);
+    fn lex_with(input: &'i str, scheme: &'s Scheme) -> LexResult<'i, Self> {
+        let (name, input) = lex_identifier_name(input)?;
 
         let field = scheme
             .get(name)
@@ -455,6 +439,25 @@ impl<'i, 's> LexWith<'i, &'s Scheme> for Identifier<'s> {
 
         Ok((field, input))
     }
+}
+
+#[inline]
+fn lex_identifier_name(mut input: &str) -> LexResult<'_, &str> {
+    let initial_input = input;
+
+    loop {
+        input = take_while(input, "identifier character", |c| {
+            c.is_ascii_alphanumeric() || c == '_'
+        })?
+        .1;
+
+        match expect(input, ".") {
+            Ok(rest) => input = rest,
+            Err(_) => break,
+        };
+    }
+
+    Ok((span(initial_input, input), input))
 }
 
 /// An error that occurs if an unregistered field name was queried from a
@@ -472,12 +475,12 @@ pub struct UnknownFunctionError;
 /// An error that occurs when previously defined field gets redefined.
 #[derive(Debug, PartialEq, Eq, Error)]
 #[error("attempt to redefine field {0}")]
-pub struct FieldRedefinitionError(String);
+pub struct FieldRedefinitionError(Box<str>);
 
 /// An error that occurs when previously defined function gets redefined.
 #[derive(Debug, PartialEq, Eq, Error)]
 #[error("attempt to redefine function {0}")]
-pub struct FunctionRedefinitionError(String);
+pub struct FunctionRedefinitionError(Box<str>);
 
 /// An error that occurs when trying to redefine a field or function.
 #[derive(Debug, PartialEq, Eq, Error)]
@@ -491,6 +494,27 @@ pub enum IdentifierRedefinitionError {
     Function(#[source] FunctionRedefinitionError),
 }
 
+/// An error that occurs when registering a field or function identifier.
+#[derive(Debug, PartialEq, Eq, Error)]
+pub enum IdentifierRegistrationError {
+    /// The identifier does not follow the syntax accepted for registration.
+    #[error("invalid identifier {0}")]
+    InvalidIdentifier(Box<str>),
+
+    /// The identifier is already registered as a field or function.
+    #[error("{0}")]
+    Redefinition(#[from] IdentifierRedefinitionError),
+}
+
+fn is_valid_identifier(name: &str) -> bool {
+    matches!(lex_identifier_name(name), Ok((_, "")))
+        && matches!(name.as_bytes().first(), Some(b) if b.is_ascii_alphabetic() || *b == b'_')
+        && name.split('.').all(|segment| {
+            segment
+                .bytes()
+                .any(|b| b.is_ascii_alphabetic() || b == b'_')
+        })
+}
 #[derive(Clone, Copy, Debug)]
 enum SchemeItem {
     Field(usize),
@@ -653,16 +677,23 @@ impl SchemeBuilder {
         name: Arc<str>,
         ty: Type,
         optional: bool,
-    ) -> Result<(), IdentifierRedefinitionError> {
+    ) -> Result<(), IdentifierRegistrationError> {
+        if !is_valid_identifier(&name) {
+            return Err(IdentifierRegistrationError::InvalidIdentifier(Box::from(
+                name.as_ref(),
+            )));
+        }
+
         match self.items.entry(name) {
-            Entry::Occupied(entry) => match entry.get() {
-                SchemeItem::Field(_) => Err(IdentifierRedefinitionError::Field(
-                    FieldRedefinitionError(entry.key().to_string()),
+            Entry::Occupied(entry) => Err(match entry.get() {
+                SchemeItem::Field(_) => IdentifierRedefinitionError::Field(FieldRedefinitionError(
+                    Box::from(entry.key().as_ref()),
                 )),
-                SchemeItem::Function(_) => Err(IdentifierRedefinitionError::Function(
-                    FunctionRedefinitionError(entry.key().to_string()),
-                )),
-            },
+                SchemeItem::Function(_) => IdentifierRedefinitionError::Function(
+                    FunctionRedefinitionError(Box::from(entry.key().as_ref())),
+                ),
+            }
+            .into()),
             Entry::Vacant(entry) => {
                 let index = self.fields.len();
                 self.fields.push(FieldDefinition {
@@ -681,7 +712,7 @@ impl SchemeBuilder {
         &mut self,
         name: N,
         ty: Type,
-    ) -> Result<(), IdentifierRedefinitionError> {
+    ) -> Result<(), IdentifierRegistrationError> {
         self.add_field_full(name.as_ref().into(), ty, false)
     }
 
@@ -690,7 +721,7 @@ impl SchemeBuilder {
         &mut self,
         name: N,
         ty: Type,
-    ) -> Result<(), IdentifierRedefinitionError> {
+    ) -> Result<(), IdentifierRegistrationError> {
         self.add_field_full(name.as_ref().into(), ty, true)
     }
 
@@ -699,16 +730,24 @@ impl SchemeBuilder {
         &mut self,
         name: N,
         function: impl FunctionDefinition + 'static,
-    ) -> Result<(), IdentifierRedefinitionError> {
-        match self.items.entry(name.as_ref().into()) {
-            Entry::Occupied(entry) => match entry.get() {
-                SchemeItem::Field(_) => Err(IdentifierRedefinitionError::Field(
-                    FieldRedefinitionError(entry.key().to_string()),
+    ) -> Result<(), IdentifierRegistrationError> {
+        let name = name.as_ref();
+        if !is_valid_identifier(name) {
+            return Err(IdentifierRegistrationError::InvalidIdentifier(Box::from(
+                name,
+            )));
+        }
+
+        match self.items.entry(name.into()) {
+            Entry::Occupied(entry) => Err(match entry.get() {
+                SchemeItem::Field(_) => IdentifierRedefinitionError::Field(FieldRedefinitionError(
+                    Box::from(entry.key().as_ref()),
                 )),
-                SchemeItem::Function(_) => Err(IdentifierRedefinitionError::Function(
-                    FunctionRedefinitionError(entry.key().to_string()),
-                )),
-            },
+                SchemeItem::Function(_) => IdentifierRedefinitionError::Function(
+                    FunctionRedefinitionError(Box::from(entry.key().as_ref())),
+                ),
+            }
+            .into()),
             Entry::Vacant(entry) => {
                 let index = self.functions.len();
                 self.functions
@@ -736,19 +775,34 @@ impl SchemeBuilder {
         }
     }
 
-    /// Configures the behavior of not equal comparison against a nil value.
+    /// Configures `!=` when exactly one comparison operand is nil.
     ///
-    /// Default behavior is to return `true` for `nil != <value>`.
-    /// By calling this method with `false`, this behavior can be
-    /// changed so that `nil != <value>` returns `false` instead.
+    /// By default, both `nil != <value>` and `<value> != nil` return `true`.
+    /// Passing `false` makes both return `false`. Two nil operands always
+    /// compare equal, regardless of this setting.
     pub fn set_nil_not_equal_behavior(&mut self, behavior: bool) {
         self.nil_not_equal_is_false = !behavior;
     }
 
     /// Build a new [`Scheme`] from this builder.
     pub fn build(self) -> Scheme {
+        let Self {
+            fields,
+            functions,
+            items,
+            list_types,
+            lists,
+            nil_not_equal_is_false,
+        } = self;
         Scheme {
-            inner: Arc::new(self),
+            inner: Arc::new(SchemeData {
+                fields: fields.into_boxed_slice(),
+                functions: functions.into_boxed_slice(),
+                items,
+                list_types,
+                lists: lists.into_boxed_slice(),
+                nil_not_equal_is_false,
+            }),
         }
     }
 }
@@ -773,7 +827,17 @@ impl<N: AsRef<str>> FromIterator<(N, Type)> for SchemeBuilder {
 /// in ambiguous contexts.
 #[derive(Clone, Debug)]
 pub struct Scheme {
-    inner: Arc<SchemeBuilder>,
+    inner: Arc<SchemeData>,
+}
+
+#[derive(Debug)]
+struct SchemeData {
+    fields: Box<[FieldDefinition]>,
+    functions: Box<[(IdentifierName, Box<dyn FunctionDefinition>)]>,
+    items: HashMap<IdentifierName, SchemeItem, FnvBuildHasher>,
+    list_types: HashMap<Type, usize, FnvBuildHasher>,
+    lists: Box<[(Type, Box<dyn ListDefinition>)]>,
+    nil_not_equal_is_false: bool,
 }
 
 impl PartialEq for Scheme {
@@ -1082,11 +1146,11 @@ fn test_parse_error() {
         assert_eq!(
             err,
             ParseError {
-                kind: LexErrorKind::ExpectedName("digit"),
+                kind: LexErrorKind::UnknownIdentifier,
                 input: "num == true or",
                 line_number: 1,
                 span_start: 7,
-                span_len: 7
+                span_len: 4
             }
         );
         assert_eq!(
@@ -1095,7 +1159,7 @@ fn test_parse_error() {
                 r#"
                 Filter parsing error (2:8):
                 num == true or
-                       ^^^^^^^ expected digit
+                       ^^^^ unknown identifier
                 "#
             )
         );
@@ -1860,10 +1924,83 @@ fn test_field_type_override() {
 
     assert_eq!(
         builder.add_field("foo", Type::Bytes),
-        Err(IdentifierRedefinitionError::Field(FieldRedefinitionError(
-            "foo".into()
-        )))
+        Err(IdentifierRegistrationError::Redefinition(
+            IdentifierRedefinitionError::Field(FieldRedefinitionError("foo".into()))
+        ))
     );
+}
+
+#[test]
+fn test_identifier_registration() {
+    use crate::ConcatFunction;
+
+    let mut builder = SchemeBuilder::new();
+    let valid_field_names = [
+        "_",
+        "field",
+        "Field_0",
+        "http._request",
+        "a.b2._c3",
+        "a.b2c",
+        "a2b.c",
+        "a2b",
+        "cf.response.1xxx_code",
+    ];
+    for name in valid_field_names {
+        assert_eq!(builder.add_field(name, Type::Bytes), Ok(()));
+    }
+    assert_eq!(
+        builder.add_optional_field("optional.field", Type::Int),
+        Ok(())
+    );
+    assert_eq!(
+        builder.add_function("function.name", ConcatFunction::new()),
+        Ok(())
+    );
+
+    for name in [
+        "",
+        ".field",
+        "field.",
+        "field..name",
+        "0field",
+        "123",
+        "192.0.2.1",
+        "a.1",
+        "a.123",
+        "a.1.2",
+        "f-ield",
+        "féield",
+    ] {
+        assert_eq!(
+            builder.add_field(name, Type::Bytes),
+            Err(IdentifierRegistrationError::InvalidIdentifier(name.into()))
+        );
+    }
+
+    assert_eq!(
+        builder.add_optional_field("optional.", Type::Int),
+        Err(IdentifierRegistrationError::InvalidIdentifier(
+            "optional.".into()
+        ))
+    );
+    assert_eq!(
+        builder.add_function("1function", ConcatFunction::new()),
+        Err(IdentifierRegistrationError::InvalidIdentifier(
+            "1function".into()
+        ))
+    );
+
+    let scheme = builder.build();
+    for name in valid_field_names.into_iter().chain(["optional.field"]) {
+        let (field, rest) = FieldRef::lex_with(name, &scheme).unwrap();
+        assert_eq!(field.name(), name);
+        assert_eq!(rest, "");
+    }
+
+    let (function, rest) = FunctionRef::lex_with("function.name", &scheme).unwrap();
+    assert_eq!(function.name(), "function.name");
+    assert_eq!(rest, "");
 }
 
 #[test]
@@ -1924,6 +2061,17 @@ fn test_scheme_json_serialization() {
     let new_scheme = serde_json::from_str::<Scheme>(&json).unwrap();
 
     assert_eq!(scheme.inner.fields, new_scheme.inner.fields);
+}
+
+#[test]
+fn test_scheme_json_rejects_invalid_identifier() {
+    let scheme = Scheme! { valid: Int }.build();
+    let json = serde_json::to_string(&scheme)
+        .unwrap()
+        .replace("\"valid\"", "\"1invalid\"");
+
+    let err = serde_json::from_str::<Scheme>(&json).unwrap_err();
+    assert!(err.to_string().contains("invalid identifier 1invalid"));
 }
 
 #[test]
