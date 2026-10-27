@@ -18,7 +18,9 @@ use rand::seq::IndexedRandom;
 use rand::{RngExt, SeedableRng};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use wirefilter::{ExecutionContext, Filter, Scheme, SchemeBuilder, Type};
-use wirefilter_l4::{L4Schema, LowerError, lower};
+use wirefilter_l4::{
+    L4Schema, Limits, LowerError, check, check_with_limits, lower, lower_with_limits,
+};
 
 #[derive(Debug, Clone, Copy)]
 struct Packet {
@@ -365,5 +367,66 @@ fn compact_results() {
             .all(|r| r.src_ip.is_some_and(|ip| ip.prefix() == 0)
                 && r.dst_ip.is_none()
                 && r.protocol.is_none())
+    );
+}
+
+/// `check` answers exactly what `lower` would: a corpus expression passes,
+/// and a refused one fails with the same error.
+#[test]
+fn check_agrees_with_lower() {
+    let refused = [
+        r#"ip.proto != "tcp""#,
+        r#"ip.proto == "other""#,
+        "not tcp.dst_port == 80",
+        "tcp.dst_port != 22",
+    ];
+    for source in EXACT.iter().chain(&refused) {
+        for nil_not_equal in [true, false] {
+            let ast = scheme(nil_not_equal).parse(source).unwrap();
+            assert_eq!(
+                check(&ast, &L4Schema::amygdala()),
+                lower_source(source, nil_not_equal).map(drop),
+                "`{source}` (nil != {nil_not_equal})"
+            );
+        }
+    }
+
+    let mut unknown = SchemeBuilder::new();
+    unknown.add_field("http.host", Type::Bytes).unwrap();
+    let ast = unknown.build().parse(r#"http.host == "a""#).unwrap();
+    assert_eq!(
+        check(&ast, &L4Schema::amygdala()),
+        Err(LowerError::UnknownField("http.host".into()))
+    );
+}
+
+/// The limits count the same rules in both.
+#[test]
+fn check_honours_limits() {
+    let ast = scheme(true).parse("tcp.dst_port in {80 443}").unwrap();
+    let limits = Limits {
+        max_rules: 3,
+        ..Limits::default()
+    };
+    let lowered: Result<Vec<FirewallRule>, _> =
+        lower_with_limits(&ast, &L4Schema::amygdala(), (), limits);
+    assert_eq!(
+        lowered.map(drop),
+        Err(LowerError::TooManyRules { limit: 3 })
+    );
+    assert_eq!(
+        check_with_limits(&ast, &L4Schema::amygdala(), limits),
+        Err(LowerError::TooManyRules { limit: 3 })
+    );
+    assert_eq!(
+        check_with_limits(
+            &ast,
+            &L4Schema::amygdala(),
+            Limits {
+                max_rules: 4,
+                ..limits
+            }
+        ),
+        Ok(())
     );
 }

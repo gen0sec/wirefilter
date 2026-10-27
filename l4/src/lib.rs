@@ -13,6 +13,10 @@
 //! let ruleset = Ruleset::new(id, name, NetworkDirection::Ingress, priority).with_rules(rules);
 //! ```
 //!
+//! [`check`] tells whether an expression lowers at all, and why not when it
+//! does not, so a caller can route it to the firewall or keep it in the
+//! wirefilter engine.
+//!
 //! ```text
 //! FilterAst ─► Formula over atoms ─► BDD ─► Espresso ─► cubes ─► sets ─► rules
 //!              (lower)                      (minimize)  (project)  (rules)
@@ -193,4 +197,29 @@ where
         }
     }
     Ok(sink.into_rules())
+}
+
+/// Whether `ast` lowers with the default [`Limits`]: `Ok(())` exactly when
+/// [`lower`] succeeds, otherwise the error it would return.
+///
+/// Use it to route an expression: one that passes can go to the firewall,
+/// one that does not stays with the wirefilter engine.
+pub fn check(ast: &FilterAst, schema: &L4Schema) -> Result<(), LowerError> {
+    check_with_limits(ast, schema, Limits::default())
+}
+
+/// Whether `ast` lowers within `limits`: `Ok(())` exactly when
+/// [`lower_with_limits`] succeeds, otherwise the error it would return.
+pub fn check_with_limits(
+    ast: &FilterAst,
+    schema: &L4Schema,
+    limits: Limits,
+) -> Result<(), LowerError> {
+    // The same pipeline, so the answer cannot drift from `lower`'s; only the
+    // ids are skipped.
+    #[derive(Default)]
+    struct NoId;
+    impl FreshRuleId for NoId {}
+
+    lower_with_limits::<(), NoId, ()>(ast, schema, (), limits).map(drop)
 }
