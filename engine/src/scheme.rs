@@ -1023,8 +1023,11 @@ impl<'s> Scheme {
         })
     }
 
+    /// Whether `!=` returns `true` when exactly one operand is nil.
+    ///
+    /// See [`SchemeBuilder::set_nil_not_equal_behavior`].
     #[inline]
-    pub(crate) fn nil_not_equal_behavior(&self) -> bool {
+    pub fn nil_not_equal_behavior(&self) -> bool {
         !self.inner.nil_not_equal_is_false
     }
 }
