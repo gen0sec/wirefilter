@@ -40,7 +40,7 @@
 //! dropping it would install a rule matching more than was written. That
 //! covers unknown fields, functions, lists, string matching, bitwise tests,
 //! quantifiers, protocols Hillock has no name for (anything but TCP, UDP,
-//! ICMP and ICMPv6), and an expression whose rules exceed [`Limits`].
+//! ICMP and ICMPv6), and an expression beyond the caller's [`Limits`].
 //!
 //! The one known narrowing is ICMP across families: protocol 1 is emitted only
 //! under IPv4 and protocol 58 only under IPv6. An IPv6 packet whose next
@@ -132,9 +132,11 @@ pub struct Limits {
     /// Distinct comparisons (atoms). Minimisation cost grows exponentially
     /// with this in the worst case.
     pub max_atoms: usize,
-    /// Rules in the result. Negated address sets are the usual cause of many
-    /// rules: `not ip.src in {10.0.0.0/8}` alone is a dozen prefixes per
-    /// family.
+    /// Rules in the result; unlimited (`usize::MAX`) by default. Negated
+    /// address sets are the usual cause of many rules: `not ip.src in
+    /// {10.0.0.0/8}` alone is a dozen prefixes per family. Set a cap to match
+    /// the target backend: Hillock's eBPF datapaths refuse a ruleset of more
+    /// than 128 rules.
     pub max_rules: usize,
 }
 
@@ -142,7 +144,7 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             max_atoms: 64,
-            max_rules: 4096,
+            max_rules: usize::MAX,
         }
     }
 }

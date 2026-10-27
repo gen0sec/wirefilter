@@ -430,3 +430,13 @@ fn check_honours_limits() {
         Ok(())
     );
 }
+
+/// No rule cap unless the caller sets one: 2100 ports in two families are
+/// 4200 rules, past the 4096 the default used to stop at.
+#[test]
+fn rule_count_is_unlimited_by_default() {
+    let ports: Vec<String> = (0..2100).map(|i| (2 * i + 1).to_string()).collect();
+    let source = format!("tcp.dst_port in {{{}}}", ports.join(" "));
+    let rules = lower_source(&source, true).unwrap();
+    assert_eq!(rules.len(), 4200);
+}
