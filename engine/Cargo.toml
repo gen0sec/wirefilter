@@ -32,7 +32,6 @@ cfg-if.workspace = true
 cidr.workspace = true
 dyn-clone.workspace = true
 erased-serde.workspace = true
-espresso-logic.workspace = true
 fnv.workspace = true
 get-size2 = { workspace = true, optional = true }
 memchr.workspace = true

@@ -1,0 +1,22 @@
+[package]
+name = "wirefilter-l4"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Lowers wirefilter expressions into Hillock L4 (5-tuple) firewall rules"
+license = "MIT"
+keywords = ["filter", "firewall", "wirefilter"]
+categories = ["network-programming"]
+publish.workspace = true
+
+[lib]
+name = "wirefilter_l4"
+
+[dependencies]
+espresso-logic.workspace = true
+hillock.workspace = true
+thiserror.workspace = true
+wirefilter.workspace = true
+
+[dev-dependencies]
+rand.workspace = true
