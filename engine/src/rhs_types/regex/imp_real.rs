@@ -1,13 +1,13 @@
 use super::Error;
 use crate::{ParserSettings, RegexFormat};
+use arcstr::ArcStr;
 use regex_automata::MatchKind;
 use regex_automata::nfa::thompson::WhichCaptures;
-use std::sync::Arc;
 
 /// Wrapper around [`regex_automata::meta::Regex`]
 #[derive(Clone)]
 pub struct Regex {
-    pattern: Arc<str>,
+    pattern: ArcStr,
     regex: regex_automata::meta::Regex,
     format: RegexFormat,
 }
@@ -15,7 +15,7 @@ pub struct Regex {
 impl Regex {
     /// Retrieves the syntax configuration that will be used to build the regex.
     #[inline]
-    fn syntax_config() -> regex_automata::util::syntax::Config {
+    pub fn syntax_config() -> regex_automata::util::syntax::Config {
         regex_automata::util::syntax::Config::new()
             .unicode(false)
             .utf8(false)
@@ -23,30 +23,31 @@ impl Regex {
 
     /// Retrieves the meta configuration that will be used to build the regex.
     #[inline]
-    fn meta_config(settings: &ParserSettings) -> regex_automata::meta::Config {
+    pub fn meta_config(settings: &ParserSettings) -> regex_automata::meta::Config {
         regex_automata::meta::Config::new()
             .match_kind(MatchKind::LeftmostFirst)
             .utf8_empty(false)
             .dfa(false)
-            .nfa_size_limit(Some(settings.regex_compiled_size_limit))
             .onepass(false)
-            .dfa_size_limit(Some(settings.regex_compiled_size_limit))
+            .nfa_size_limit(Some(settings.regex_compiled_size_limit))
             .hybrid_cache_capacity(settings.regex_dfa_size_limit)
+            .pool_capacity(settings.regex_pool_capacity)
             .which_captures(WhichCaptures::None)
     }
 
     /// Compiles a regular expression.
     pub fn new(
-        pattern: &str,
+        pattern: impl Into<ArcStr>,
         format: RegexFormat,
         settings: &ParserSettings,
     ) -> Result<Self, Error> {
+        let pattern = pattern.into();
         ::regex_automata::meta::Builder::new()
             .configure(Self::meta_config(settings))
             .syntax(Self::syntax_config())
-            .build(pattern)
+            .build(&pattern)
             .map(|regex| Regex {
-                pattern: Arc::from(pattern),
+                pattern,
                 regex,
                 format,
             })
@@ -54,9 +55,9 @@ impl Regex {
                 if let Some(limit) = err.size_limit() {
                     Error::CompiledTooBig(limit)
                 } else if let Some(syntax) = err.syntax_error() {
-                    Error::Syntax(syntax.to_string())
+                    Error::Syntax(syntax.to_string().into_boxed_str())
                 } else {
-                    Error::Other(err.to_string())
+                    Error::Other(err.to_string().into_boxed_str())
                 }
             })
     }
@@ -64,6 +65,12 @@ impl Regex {
     /// Returns the pattern of this regex.
     #[inline]
     pub fn as_str(&self) -> &str {
+        &self.pattern
+    }
+
+    /// Returns the shared pattern of this regex.
+    #[inline]
+    pub fn pattern(&self) -> &ArcStr {
         &self.pattern
     }
 
