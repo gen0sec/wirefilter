@@ -1,3 +1,5 @@
+use crate::compiler::MemoLayout;
+use crate::filter::CompiledValueResult;
 use crate::scheme::{Field, List, Scheme, SchemeMismatchError};
 use crate::types::{GetType, LhsValue, LhsValueSeed, Type, TypeMismatchError};
 use crate::{FieldRef, ListMatcher, ListRef, UnknownFieldError};
@@ -7,6 +9,8 @@ use serde::ser::{SerializeMap, SerializeSeq, Serializer};
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Debug;
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use thiserror::Error;
 
 /// An error that occurs when setting the field value in the [`crate::ExecutionContext`].
@@ -33,6 +37,68 @@ pub struct InvalidListMatcherError {
     list: String,
 }
 
+type MemoSlot = OnceLock<Result<LhsValue<'static>, Type>>;
+
+/// Results of the pure function calls that a [`crate::MemoCompiler`] shares
+/// between filters.
+///
+/// Results are stored owned, so the table never borrows from the context's
+/// `'e` and survives [`ExecutionContext::reset`]. A hit hands out a borrowed
+/// view of the stored value.
+#[derive(Default)]
+struct Memo {
+    layout: Option<MemoLayout>,
+    slots: Box<[MemoSlot]>,
+    /// Set once any slot is filled, so invalidating an unused table is free.
+    used: AtomicBool,
+}
+
+impl Memo {
+    fn new(layout: &MemoLayout) -> Self {
+        Self {
+            layout: Some(layout.clone()),
+            slots: (0..layout.slot_count()).map(|_| OnceLock::new()).collect(),
+            used: AtomicBool::new(false),
+        }
+    }
+
+    /// Forgets every cached result.
+    #[inline]
+    fn invalidate(&mut self) {
+        if std::mem::take(self.used.get_mut()) {
+            self.slots.iter_mut().for_each(|slot| {
+                slot.take();
+            });
+        }
+    }
+}
+
+impl Clone for Memo {
+    fn clone(&self) -> Self {
+        Self {
+            layout: self.layout.clone(),
+            slots: self.slots.clone(),
+            used: AtomicBool::new(self.used.load(Ordering::Relaxed)),
+        }
+    }
+}
+
+impl Debug for Memo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Memo")
+            .field("slots", &self.slots.len())
+            .finish()
+    }
+}
+
+/// Cached results are derived data: two contexts holding the same values and
+/// lists are equal whatever they have computed so far.
+impl PartialEq for Memo {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
 /// An execution context stores an associated [`struct@crate::Scheme`] and a
 /// set of runtime values to execute [`crate::Filter`] against.
 ///
@@ -44,6 +110,7 @@ pub struct ExecutionContext<'e, U = ()> {
     values: Box<[Option<LhsValue<'e>>]>,
     list_matchers: Box<[Box<dyn ListMatcher>]>,
     user_data: U,
+    memo: Memo,
 }
 
 impl<'e, U> ExecutionContext<'e, U> {
@@ -61,6 +128,22 @@ impl<'e, U> ExecutionContext<'e, U> {
     ///
     /// This scheme will be used for resolving any field names and indices.
     pub fn new_with(scheme: &Scheme, f: impl FnOnce() -> U) -> Self {
+        Self::build(scheme, f, Memo::default())
+    }
+
+    /// Creates an execution context associated with a given scheme, with room
+    /// to cache the results of the filters that a [`crate::MemoCompiler`]
+    /// compiled.
+    ///
+    /// `layout` is the one returned by [`crate::MemoCompiler::layout`].
+    pub fn new_with_memo(scheme: &Scheme, layout: &MemoLayout) -> Self
+    where
+        U: Default,
+    {
+        Self::build(scheme, Default::default, Memo::new(layout))
+    }
+
+    fn build(scheme: &Scheme, f: impl FnOnce() -> U, memo: Memo) -> Self {
         ExecutionContext {
             scheme: scheme.clone(),
             values: vec![None; scheme.field_count()].into(),
@@ -69,12 +152,45 @@ impl<'e, U> ExecutionContext<'e, U> {
                 .map(|list| list.definition().new_matcher())
                 .collect(),
             user_data: f(),
+            memo,
         }
     }
 
     /// Returns the associated scheme.
     pub fn scheme(&self) -> &Scheme {
         &self.scheme
+    }
+
+    /// Returns the layout this context was created with, if any.
+    ///
+    /// A caller that keeps a context across configuration loads compares it
+    /// to the current layout to know whether the context still fits.
+    pub fn memo_layout(&self) -> Option<&MemoLayout> {
+        self.memo.layout.as_ref()
+    }
+
+    /// Returns the cached result of a memoized call, computing it on a miss.
+    /// A slot the context does not have is computed every time.
+    #[inline]
+    pub(crate) fn memoize(
+        &'e self,
+        slot: usize,
+        compute: impl FnOnce() -> CompiledValueResult<'e>,
+    ) -> CompiledValueResult<'e> {
+        let Some(cell) = self.memo.slots.get(slot) else {
+            return compute();
+        };
+        let cached = cell.get_or_init(|| {
+            let result = compute().map(LhsValue::into_owned);
+            if !self.memo.used.load(Ordering::Relaxed) {
+                self.memo.used.store(true, Ordering::Relaxed);
+            }
+            result
+        });
+        match cached {
+            Ok(value) => Ok(value.as_ref()),
+            Err(ty) => Err(*ty),
+        }
     }
 
     /// Sets a runtime value for a given field name.
@@ -92,6 +208,7 @@ impl<'e, U> ExecutionContext<'e, U> {
         let value_type = value.get_type();
 
         if field_type == value_type {
+            self.memo.invalidate();
             Ok(self.values[field.index()].replace(value))
         } else {
             Err(SetFieldValueError::TypeMismatch(TypeMismatchError {
@@ -117,6 +234,7 @@ impl<'e, U> ExecutionContext<'e, U> {
         let value_type = value.get_type();
 
         if field_type == value_type {
+            self.memo.invalidate();
             Ok(self.values[field.index()].replace(value))
         } else {
             Err(SetFieldValueError::TypeMismatch(TypeMismatchError {
@@ -182,12 +300,14 @@ impl<'e, U> ExecutionContext<'e, U> {
     pub fn get_list_matcher_mut(&mut self, list: ListRef<'_>) -> &mut dyn ListMatcher {
         assert!(self.scheme() == list.scheme());
 
+        self.memo.invalidate();
         &mut *self.list_matchers[list.index()]
     }
 
     /// Get the list matcher object for the specified type.
     pub fn get_list_matcher_mut_from_type(&mut self, ty: &Type) -> Option<&mut dyn ListMatcher> {
         let list = self.scheme.get_list(ty)?;
+        self.memo.invalidate();
         Some(&mut *self.list_matchers[list.index()])
     }
 
@@ -213,6 +333,7 @@ impl<'e, U> ExecutionContext<'e, U> {
             values: self.values,
             list_matchers: self.list_matchers,
             user_data: default(self.user_data),
+            memo: self.memo,
         }
     }
 
@@ -230,6 +351,7 @@ impl<'e, U> ExecutionContext<'e, U> {
             values: self.values.clone(),
             list_matchers: self.list_matchers.clone(),
             user_data,
+            memo: self.memo.clone(),
         }
     }
 
@@ -237,6 +359,7 @@ impl<'e, U> ExecutionContext<'e, U> {
     /// while retaining the allocated memory.
     #[inline]
     pub fn clear(&mut self) {
+        self.memo.invalidate();
         self.values.iter_mut().for_each(|value| *value = None);
         self.list_matchers
             .iter_mut()
@@ -268,7 +391,9 @@ impl<'e, U> ExecutionContext<'e, U> {
         // SAFETY: `clear` has just replaced every value with `None`, dropping
         // each `LhsValue<'e>`, and cleared the list matchers. `scheme` is
         // owned, `list_matchers` are `'static` trait objects and `user_data`
-        // is `U: 'static`-agnostic — none of them borrow from `'e`. With no
+        // is `U: 'static`-agnostic — none of them borrow from `'e`. The memo
+        // slots hold `LhsValue<'static>` only, and `clear` has emptied them
+        // too, so a result computed from `'e` data cannot outlive it. With no
         // reachable data borrowed from `'e`, re-labelling the lifetime cannot
         // create a dangling reference. The two types differ only in that
         // lifetime parameter, so they have identical layout.
@@ -289,12 +414,14 @@ impl<'a, 'e, U, T> ExecutionContextGuard<'a, 'e, U, T> {
         let scheme = old.scheme().clone();
         let values = std::mem::take(&mut old.values);
         let list_matchers = std::mem::take(&mut old.list_matchers);
+        let memo = std::mem::take(&mut old.memo);
 
         let new = ExecutionContext {
             scheme,
             values,
             list_matchers,
             user_data,
+            memo,
         };
 
         Self { old, new }
@@ -319,6 +446,7 @@ impl<U, T> Drop for ExecutionContextGuard<'_, '_, U, T> {
     fn drop(&mut self) {
         self.old.values = std::mem::take(&mut self.new.values);
         self.old.list_matchers = std::mem::take(&mut self.new.list_matchers);
+        self.old.memo = std::mem::take(&mut self.new.memo);
     }
 }
 

@@ -1,7 +1,10 @@
+use crate::scheme::Function;
 use crate::{
     ComparisonExpr, CompiledExpr, CompiledValueExpr, Expr, FunctionCallArgExpr, FunctionCallExpr,
-    IndexExpr, LogicalExpr, ValueExpr,
+    IndexExpr, LogicalExpr, ValueExpr, Visitor,
 };
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Trait used to drive the compilation of a [`crate::FilterAst`] into a [`crate::Filter`].
 pub trait Compiler: Sized {
@@ -79,4 +82,110 @@ impl<U> DefaultCompiler<U> {
 
 impl<U: 'static> Compiler for DefaultCompiler<U> {
     type U = U;
+}
+
+/// Shape of the memo table that a [`MemoCompiler`] expects from an
+/// [`crate::ExecutionContext`].
+///
+/// Create the context with [`crate::ExecutionContext::new_with_memo`]. Two
+/// layouts compare equal only when they are the same object, so a layout that
+/// is rebuilt on every configuration load tells a caller holding a recycled
+/// context that the context no longer fits the compiled filters.
+#[derive(Clone, Debug)]
+pub struct MemoLayout(Arc<MemoLayoutInner>);
+
+#[derive(Debug)]
+struct MemoLayoutInner {
+    slot_count: usize,
+}
+
+impl MemoLayout {
+    /// Number of memoized function calls.
+    #[inline]
+    pub fn slot_count(&self) -> usize {
+        self.0.slot_count
+    }
+}
+
+impl PartialEq for MemoLayout {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for MemoLayout {}
+
+/// Finds out whether every function inside a call is pure.
+struct PurityVisitor {
+    pure: bool,
+}
+
+impl<'a> Visitor<'a> for PurityVisitor {
+    #[inline]
+    fn visit_function(&mut self, function: &'a Function) {
+        self.pure &= function.as_definition().is_pure();
+    }
+}
+
+/// Compiler that computes each pure function call once per
+/// [`crate::ExecutionContext`].
+///
+/// One compiler hands out one slot per distinct [`FunctionCallExpr`], so
+/// every [`crate::Filter`] compiled with the same compiler shares the result.
+/// A call is memoized only when no function inside it is impure, see
+/// [`crate::FunctionDefinition::is_pure`].
+///
+/// Execute the filters against a context from
+/// [`crate::ExecutionContext::new_with_memo`] and the layout from
+/// [`MemoCompiler::layout`]. Against any other context every call is computed
+/// as usual.
+#[derive(Debug)]
+pub struct MemoCompiler<U = ()> {
+    slots: HashMap<FunctionCallExpr, usize>,
+    _marker: std::marker::PhantomData<fn() -> U>,
+}
+
+impl<U> Default for MemoCompiler<U> {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            slots: HashMap::new(),
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<U> MemoCompiler<U> {
+    /// Creates a new [`MemoCompiler`].
+    #[inline]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the layout of the contexts that suit the filters compiled so far.
+    ///
+    /// Every call returns a new, unequal layout: call it once, after the last
+    /// filter is compiled, and clone the result.
+    pub fn layout(&self) -> MemoLayout {
+        MemoLayout(Arc::new(MemoLayoutInner {
+            slot_count: self.slots.len(),
+        }))
+    }
+}
+
+impl<U: 'static> Compiler for MemoCompiler<U> {
+    type U = U;
+
+    fn compile_function_call_expr(&mut self, node: FunctionCallExpr) -> CompiledValueExpr<U> {
+        let mut purity = PurityVisitor { pure: true };
+        node.walk(&mut purity);
+        if !purity.pure {
+            return self.compile_value_expr(node);
+        }
+        let next = self.slots.len();
+        let slot = *self.slots.entry(node.clone()).or_insert(next);
+        let call = self.compile_value_expr(node);
+        CompiledValueExpr::new(move |ctx| ctx.memoize(slot, || call.execute(ctx)))
+    }
 }
