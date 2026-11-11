@@ -97,6 +97,8 @@ pub struct MemoLayout(Arc<MemoLayoutInner>);
 #[derive(Debug)]
 struct MemoLayoutInner {
     slot_count: usize,
+    /// Identity of the [`MemoCompiler`] that created the layout.
+    owner: Arc<()>,
 }
 
 impl MemoLayout {
@@ -104,6 +106,11 @@ impl MemoLayout {
     #[inline]
     pub fn slot_count(&self) -> usize {
         self.0.slot_count
+    }
+
+    #[inline]
+    pub(crate) fn owner(&self) -> &Arc<()> {
+        &self.0.owner
     }
 }
 
@@ -138,10 +145,12 @@ impl<'a> Visitor<'a> for PurityVisitor {
 ///
 /// Execute the filters against a context from
 /// [`crate::ExecutionContext::new_with_memo`] and the layout from
-/// [`MemoCompiler::layout`]. Against any other context every call is computed
-/// as usual.
+/// [`MemoCompiler::layout`]. A context uses its slots only for filters of the
+/// compiler that created its layout, whichever layout of that compiler it was
+/// built from. Against any other context every call is computed as usual.
 #[derive(Debug)]
 pub struct MemoCompiler<U = ()> {
+    owner: Arc<()>,
     slots: HashMap<FunctionCallExpr, usize>,
     _marker: std::marker::PhantomData<fn() -> U>,
 }
@@ -150,6 +159,7 @@ impl<U> Default for MemoCompiler<U> {
     #[inline]
     fn default() -> Self {
         Self {
+            owner: Arc::new(()),
             slots: HashMap::new(),
             _marker: std::marker::PhantomData,
         }
@@ -170,6 +180,7 @@ impl<U> MemoCompiler<U> {
     pub fn layout(&self) -> MemoLayout {
         MemoLayout(Arc::new(MemoLayoutInner {
             slot_count: self.slots.len(),
+            owner: self.owner.clone(),
         }))
     }
 }
@@ -186,6 +197,7 @@ impl<U: 'static> Compiler for MemoCompiler<U> {
         let next = self.slots.len();
         let slot = *self.slots.entry(node.clone()).or_insert(next);
         let call = self.compile_value_expr(node);
-        CompiledValueExpr::new(move |ctx| ctx.memoize(slot, || call.execute(ctx)))
+        let owner = self.owner.clone();
+        CompiledValueExpr::new(move |ctx| ctx.memoize(&owner, slot, || call.execute(ctx)))
     }
 }
