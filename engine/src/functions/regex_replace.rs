@@ -13,8 +13,6 @@
 //! regex size limits apply. The `regex` crate matches in linear time, so a
 //! hostile input cannot make a rule backtrack.
 
-use std::iter;
-
 use crate::lhs_types::Bytes;
 use crate::{
     FunctionArgInvalidConstantError, FunctionArgKind, FunctionArgs, FunctionDefinition,
@@ -22,6 +20,7 @@ use crate::{
     RhsValue, Type,
 };
 use outer_regex::bytes::{Regex, RegexBuilder};
+use std::iter;
 
 /// Highest capture group a replacement may reference.
 const MAX_GROUP: usize = 8;
