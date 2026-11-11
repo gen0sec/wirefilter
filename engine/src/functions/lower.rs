@@ -7,6 +7,20 @@ use std::iter;
 #[derive(Debug, Default)]
 pub struct LowerFunction {}
 
+/// Branch-free per chunk so that the scan vectorizes; `iter().any()` stops at
+/// the first hit, which prevents that.
+#[inline]
+fn has_ascii_uppercase(bytes: &[u8]) -> bool {
+    let (chunks, rest) = bytes.as_chunks::<32>();
+    let in_chunks = chunks.iter().any(|chunk| {
+        chunk
+            .iter()
+            .fold(0u8, |acc, &b| acc | u8::from(b.wrapping_sub(b'A') < 26))
+            != 0
+    });
+    in_chunks || rest.iter().any(u8::is_ascii_uppercase)
+}
+
 #[inline]
 fn lower_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
     let arg = args.next().expect("expected 1 argument, got 0");
@@ -17,11 +31,12 @@ fn lower_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
 
     match arg {
         Ok(LhsValue::Bytes(bytes)) => {
-            let bytes_lower: Vec<u8> = bytes.into_owned().to_vec();
-            let bytes_lower = bytes_lower.to_ascii_lowercase();
-            Some(LhsValue::Bytes(Bytes::Owned(
-                bytes_lower.into_boxed_slice(),
-            )))
+            if !has_ascii_uppercase(&bytes) {
+                return Some(LhsValue::Bytes(bytes));
+            }
+            let mut owned = bytes.into_owned();
+            owned.make_ascii_lowercase();
+            Some(LhsValue::Bytes(Bytes::Owned(owned)))
         }
         Err(Type::Bytes) => None,
         _ => unreachable!(),
@@ -119,6 +134,72 @@ mod tests {
         // Test with missing field
         let mut args_missing = vec![Err(Type::Bytes)].into_iter();
         assert_eq!(lower_impl(&mut args_missing), None);
+    }
+
+    #[test]
+    fn test_lower_unchanged_input_is_not_copied() {
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(
+            b"already lower \xc3\xa9 1",
+        )))]
+        .into_iter();
+        let out = lower_impl(&mut args).unwrap();
+        assert!(matches!(
+            out,
+            LhsValue::Bytes(Bytes::Borrowed(b"already lower \xc3\xa9 1"))
+        ));
+
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"")))].into_iter();
+        let out = lower_impl(&mut args).unwrap();
+        assert!(matches!(out, LhsValue::Bytes(Bytes::Borrowed(b""))));
+
+        let owned = Bytes::Owned(b"already lower \xc3\xa9 1".to_vec().into_boxed_slice());
+        let mut args = vec![Ok(LhsValue::Bytes(owned))].into_iter();
+        let out = lower_impl(&mut args).unwrap();
+        assert!(matches!(out, LhsValue::Bytes(Bytes::Owned(_))));
+        assert_eq!(
+            out,
+            LhsValue::Bytes(Bytes::Borrowed(b"already lower \xc3\xa9 1"))
+        );
+    }
+
+    #[test]
+    fn test_lower_changes_ascii_only_in_place() {
+        let mut args =
+            vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"MiXeD \xc3\xa9 CaSe")))].into_iter();
+        let out = lower_impl(&mut args).unwrap();
+        assert!(matches!(out, LhsValue::Bytes(Bytes::Owned(_))));
+        assert_eq!(
+            out,
+            LhsValue::Bytes(Bytes::Borrowed(b"mixed \xc3\xa9 case"))
+        );
+
+        // A change in the last byte only is still found.
+        let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(b"abc.D")))].into_iter();
+        assert_eq!(
+            lower_impl(&mut args),
+            Some(LhsValue::Bytes(Bytes::Owned(
+                b"abc.d".to_vec().into_boxed_slice()
+            )))
+        );
+    }
+
+    #[test]
+    fn test_lower_finds_a_change_at_every_position() {
+        for len in [1usize, 31, 32, 33, 64, 70] {
+            for pos in 0..len {
+                let mut input = vec![b'a'; len];
+                input[pos] = b'Z';
+                let mut expected = input.clone();
+                expected.make_ascii_lowercase();
+                let mut args = vec![Ok(LhsValue::Bytes(Bytes::Borrowed(&input)))].into_iter();
+                let out = lower_impl(&mut args).unwrap();
+                assert_eq!(
+                    out,
+                    LhsValue::Bytes(Bytes::Borrowed(&expected)),
+                    "len {len} pos {pos}"
+                );
+            }
+        }
     }
 
     #[test]
