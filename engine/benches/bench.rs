@@ -294,6 +294,55 @@ fn bench_memo_shared_call(c: &mut Criterion) {
     group.finish();
 }
 
+/// ~16 KiB inputs through the builtin `url_decode` and `lower`.
+fn bench_decode_lower_16k(c: &mut Criterion) {
+    let mut builder = SchemeBuilder::new();
+    builder.add_field("x", Type::Bytes).unwrap();
+    builder
+        .add_function("lower", LowerFunction::default())
+        .unwrap();
+    builder
+        .add_function("url_decode", UrlDecodeFunction::default())
+        .unwrap();
+    let scheme = builder.build();
+    let field = scheme.get_field("x").unwrap();
+
+    let plain = "abcdefghij/klmnop?q=rstuvwxyz&".repeat(16 * 1024 / 30);
+    let escaped = "ab%20cd+ef%2Fgh%3Cscript%3E&".repeat(16 * 1024 / 28);
+    let lower_in = "example.org/some/lowercase/path?".repeat(16 * 1024 / 32);
+    let mixed_in = "Example.ORG/Some/MixedCase/Path?".repeat(16 * 1024 / 32);
+
+    let cases: [(&str, &str, &str); 6] = [
+        ("url_decode/no_escapes", r#"url_decode(x) == "n""#, &plain),
+        ("url_decode/escapes", r#"url_decode(x) == "n""#, &escaped),
+        (
+            "url_decode_r/no_escapes",
+            r#"url_decode(x, "r") == "n""#,
+            &plain,
+        ),
+        (
+            "url_decode_r/escapes",
+            r#"url_decode(x, "r") == "n""#,
+            &escaped,
+        ),
+        ("lower/already_lower", r#"lower(x) == "n""#, &lower_in),
+        ("lower/mixed", r#"lower(x) == "n""#, &mixed_in),
+    ];
+
+    let mut group = c.benchmark_group("fast_paths_16k");
+    for (name, expr, input) in cases {
+        let filter = scheme.parse(expr).unwrap().compile();
+        let mut ctx = ExecutionContext::new(&scheme);
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                ctx.set_field_value(field, input).unwrap();
+                filter.execute(&ctx).unwrap()
+            })
+        });
+    }
+    group.finish();
+}
+
 criterion_group! {
     name = field_benchmarks;
     config = Criterion::default();
@@ -304,6 +353,7 @@ criterion_group! {
         bench_string_matches,
         bench_string_function_comparison,
         bench_memo_shared_call,
+        bench_decode_lower_16k,
 }
 
 criterion_main!(field_benchmarks);
