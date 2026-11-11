@@ -259,5 +259,11 @@ mod tests {
 
         is_send::<Filter<ExecutionContext<'_>>>();
         is_sync::<Filter<ExecutionContext<'_>>>();
+        is_send::<ExecutionContext<'static>>();
+        is_sync::<ExecutionContext<'static>>();
+        is_send::<crate::MemoLayout>();
+        is_sync::<crate::MemoLayout>();
+        is_send::<crate::MemoCompiler>();
+        is_sync::<crate::MemoCompiler>();
     }
 }
