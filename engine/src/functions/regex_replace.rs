@@ -142,6 +142,10 @@ fn state(ctx: Option<&mut FunctionDefinitionContext>) -> Option<&mut Compiled> {
 }
 
 impl FunctionDefinition for RegexReplaceFunction {
+    fn is_pure(&self) -> bool {
+        true
+    }
+
     fn context(&self) -> Option<FunctionDefinitionContext> {
         Some(FunctionDefinitionContext::new(Compiled::default()))
     }

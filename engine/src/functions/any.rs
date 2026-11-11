@@ -28,6 +28,10 @@ fn any_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
 pub struct AnyFunction {}
 
 impl FunctionDefinition for AnyFunction {
+    fn is_pure(&self) -> bool {
+        true
+    }
+
     fn check_param(
         &self,
         _: &ParserSettings,

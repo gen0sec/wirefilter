@@ -147,6 +147,10 @@ fn url_decode_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
 }
 
 impl FunctionDefinition for UrlDecodeFunction {
+    fn is_pure(&self) -> bool {
+        true
+    }
+
     fn check_param(
         &self,
         _: &crate::ParserSettings,

@@ -84,6 +84,10 @@ fn json_lookup_string_impl<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a
 }
 
 impl FunctionDefinition for JsonLookupStringFunction {
+    fn is_pure(&self) -> bool {
+        true
+    }
+
     fn check_param(
         &self,
         _: &crate::ParserSettings,
