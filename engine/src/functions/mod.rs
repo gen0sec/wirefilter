@@ -408,6 +408,15 @@ impl std::fmt::Debug for FunctionDefinitionContext {
 
 /// Trait to implement function
 pub trait FunctionDefinition: Debug + Send + Sync {
+    /// Whether a call is deterministic and free of side effects: the result
+    /// depends only on the argument values and the call's literals.
+    ///
+    /// A `MemoCompiler` computes a pure call once per
+    /// [`crate::ExecutionContext`] and reuses the result. The default is
+    /// `false`, so a function that does not opt in is always recomputed.
+    fn is_pure(&self) -> bool {
+        false
+    }
     /// Custom context to store information during parsing
     fn context(&self) -> Option<FunctionDefinitionContext> {
         None
@@ -620,5 +629,36 @@ mod tests {
         fn is_sync<T: Sync>() {}
 
         is_sync::<FunctionDefinitionContext>();
+    }
+
+    #[test]
+    fn test_builtin_purity() {
+        macro_rules! assert_pure {
+            ($($name:literal => $ty:ty),* $(,)?) => {
+                $(assert!(<$ty>::default().is_pure(), concat!($name, " must be pure"));)*
+            };
+        }
+        assert_pure!(
+            "all" => AllFunction,
+            "any" => AnyFunction,
+            "cidr" => CIDRFunction,
+            "concat" => ConcatFunction,
+            "decode_base64" => DecodeBase64Function,
+            "ends_with" => EndsWithFunction,
+            "json_lookup_integer" => JsonLookupIntegerFunction,
+            "json_lookup_string" => JsonLookupStringFunction,
+            "len" => LenFunction,
+            "lower" => LowerFunction,
+            "regex_replace" => RegexReplaceFunction,
+            "remove_bytes" => RemoveBytesFunction,
+            "remove_query_args" => RemoveQueryArgsFunction,
+            "starts_with" => StartsWithFunction,
+            "substring" => SubstringFunction,
+            "to_string" => ToStringFunction,
+            "upper" => UpperFunction,
+            "url_decode" => UrlDecodeFunction,
+            "wildcard_replace" => WildcardReplaceFunction,
+        );
+        assert!(!UUID4Function::default().is_pure());
     }
 }
