@@ -5,13 +5,14 @@ use std::alloc::System;
 #[global_allocator]
 static A: System = System;
 
-use criterion::{Bencher, Criterion, criterion_group, criterion_main};
+use criterion::{Bencher, BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::clone::Clone;
 use std::fmt::Debug;
 use std::net::IpAddr;
 use wirefilter::{
-    Bytes, ExecutionContext, FilterAst, FunctionArgs, GetType, LhsValue, SchemeBuilder,
-    SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl, SimpleFunctionParam, Type,
+    Bytes, DefaultCompiler, ExecutionContext, Filter, FilterAst, FunctionArgs, GetType, LhsValue,
+    LowerFunction, MemoCompiler, SchemeBuilder, SimpleFunctionArgKind, SimpleFunctionDefinition,
+    SimpleFunctionImpl, SimpleFunctionParam, Type, UrlDecodeFunction,
 };
 
 fn lowercase<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
@@ -241,6 +242,58 @@ fn bench_string_function_comparison(c: &mut Criterion) {
     .run(c)
 }
 
+/// N filters share `lower(url_decode(x, "r"))`. Each iteration sets the field
+/// (which drops the cache) and runs every filter, so the memoized variant pays
+/// for one evaluation of the shared call per iteration, not N.
+fn bench_memo_shared_call(c: &mut Criterion) {
+    let mut builder = SchemeBuilder::new();
+    builder.add_field("x", Type::Bytes).unwrap();
+    builder
+        .add_function("lower", LowerFunction::default())
+        .unwrap();
+    builder
+        .add_function("url_decode", UrlDecodeFunction::default())
+        .unwrap();
+    let scheme = builder.build();
+    let value = "%2561dmin%252F..%252F..%252FETC%252Fpasswd%3Cscript%3E";
+
+    let mut group = c.benchmark_group("memo_shared_call");
+    for n in [1usize, 4, 16, 64] {
+        let exprs: Vec<String> = (0..n)
+            .map(|i| format!(r#"lower(url_decode(x, "r")) contains "needle{i}""#))
+            .collect();
+        let field = scheme.get_field("x").unwrap();
+
+        let mut default = DefaultCompiler::<()>::new();
+        let filters: Vec<Filter> = exprs
+            .iter()
+            .map(|e| scheme.parse(e).unwrap().compile_with_compiler(&mut default))
+            .collect();
+        let mut ctx = ExecutionContext::new(&scheme);
+        group.bench_with_input(BenchmarkId::new("default", n), &n, |b, _| {
+            b.iter(|| {
+                ctx.set_field_value(field, value).unwrap();
+                filters.iter().filter(|f| f.execute(&ctx).unwrap()).count()
+            })
+        });
+
+        let mut memo = MemoCompiler::<()>::new();
+        let filters: Vec<Filter> = exprs
+            .iter()
+            .map(|e| scheme.parse(e).unwrap().compile_with_compiler(&mut memo))
+            .collect();
+        let layout = memo.layout();
+        let mut ctx = ExecutionContext::new_with_memo(&scheme, &layout);
+        group.bench_with_input(BenchmarkId::new("memo", n), &n, |b, _| {
+            b.iter(|| {
+                ctx.set_field_value(field, value).unwrap();
+                filters.iter().filter(|f| f.execute(&ctx).unwrap()).count()
+            })
+        });
+    }
+    group.finish();
+}
+
 criterion_group! {
     name = field_benchmarks;
     config = Criterion::default();
@@ -250,6 +303,7 @@ criterion_group! {
         bench_string_comparisons,
         bench_string_matches,
         bench_string_function_comparison,
+        bench_memo_shared_call,
 }
 
 criterion_main!(field_benchmarks);
