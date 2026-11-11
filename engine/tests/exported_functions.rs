@@ -26,13 +26,17 @@ fn scheme_with_all_functions() -> wirefilter::Scheme {
         .unwrap();
     b.add_function("remove_query_args", RemoveQueryArgsFunction::default())
         .unwrap();
-    b.add_function("to_string", ToStringFunction::default()).unwrap();
+    b.add_function("to_string", ToStringFunction::default())
+        .unwrap();
     b.add_function("upper", UpperFunction::default()).unwrap();
     b.add_function("lower", LowerFunction::default()).unwrap();
     b.add_function("concat", ConcatFunction::default()).unwrap();
-    b.add_function("starts_with", StartsWithFunction::default()).unwrap();
-    b.add_function("ends_with", EndsWithFunction::default()).unwrap();
-    b.add_function("regex_replace", RegexReplaceFunction::default()).unwrap();
+    b.add_function("starts_with", StartsWithFunction::default())
+        .unwrap();
+    b.add_function("ends_with", EndsWithFunction::default())
+        .unwrap();
+    b.add_function("regex_replace", RegexReplaceFunction::default())
+        .unwrap();
     b.build()
 }
 
@@ -43,9 +47,12 @@ fn eval(expr: &str, body: &str) -> bool {
         .unwrap_or_else(|e| panic!("{expr} must parse: {e}"))
         .compile();
     let mut ctx = ExecutionContext::new(&scheme);
-    ctx.set_field_value(scheme.get_field("body").unwrap(), body).unwrap();
-    ctx.set_field_value(scheme.get_field("query").unwrap(), "a=1&b=2").unwrap();
-    ctx.set_field_value(scheme.get_field("n").unwrap(), 7i64).unwrap();
+    ctx.set_field_value(scheme.get_field("body").unwrap(), body)
+        .unwrap();
+    ctx.set_field_value(scheme.get_field("query").unwrap(), "a=1&b=2")
+        .unwrap();
+    ctx.set_field_value(scheme.get_field("n").unwrap(), 7i64)
+        .unwrap();
     filter.execute(&ctx).unwrap()
 }
 
@@ -97,7 +104,10 @@ fn json_lookup_string_traverses_nested_keys() {
 
 #[test]
 fn json_lookup_integer_reads_a_number() {
-    assert!(eval(r#"lookup_json_integer(body, "n") == 42"#, r#"{"n":42}"#));
+    assert!(eval(
+        r#"lookup_json_integer(body, "n") == 42"#,
+        r#"{"n":42}"#
+    ));
 }
 
 #[test]
@@ -107,19 +117,35 @@ fn remove_query_args_drops_the_named_arg() {
 
 #[test]
 fn upper_and_lower_and_to_string_round_trip() {
-    assert!(eval(r#"upper(lookup_json_string(body, "k")) == "ABC""#, r#"{"k":"abc"}"#));
-    assert!(eval(r#"lower(lookup_json_string(body, "k")) == "abc""#, r#"{"k":"ABC"}"#));
+    assert!(eval(
+        r#"upper(lookup_json_string(body, "k")) == "ABC""#,
+        r#"{"k":"abc"}"#
+    ));
+    assert!(eval(
+        r#"lower(lookup_json_string(body, "k")) == "abc""#,
+        r#"{"k":"ABC"}"#
+    ));
     assert!(eval(r#"to_string(n) == "7""#, "{}"));
 }
 
 #[test]
 fn regex_replace_rewrites_the_first_match() {
-    assert!(eval(r#"regex_replace(query, "^a=([0-9])", "x=${1}") == "x=1&b=2""#, "{}"));
-    assert!(eval(r#"regex_replace(query, "[0-9]", "N") == "a=N&b=2""#, "{}"));
+    assert!(eval(
+        r#"regex_replace(query, "^a=([0-9])", "x=${1}") == "x=1&b=2""#,
+        "{}"
+    ));
+    assert!(eval(
+        r#"regex_replace(query, "[0-9]", "N") == "a=N&b=2""#,
+        "{}"
+    ));
 }
 
 #[test]
 fn regex_replace_rejects_an_invalid_pattern_when_parsing() {
     let scheme = scheme_with_all_functions();
-    assert!(scheme.parse(r#"regex_replace(query, "(", "x") == "y""#).is_err());
+    assert!(
+        scheme
+            .parse(r#"regex_replace(query, "(", "x") == "y""#)
+            .is_err()
+    );
 }
