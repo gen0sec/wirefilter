@@ -9,8 +9,8 @@ use serde::ser::{SerializeMap, SerializeSeq, Serializer};
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Debug;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 use thiserror::Error;
 
 /// An error that occurs when setting the field value in the [`crate::ExecutionContext`].
@@ -170,14 +170,20 @@ impl<'e, U> ExecutionContext<'e, U> {
     }
 
     /// Returns the cached result of a memoized call, computing it on a miss.
-    /// A slot the context does not have is computed every time.
+    /// A slot the context does not have, or a context whose layout comes from
+    /// another compiler than `owner`, is computed every time.
     #[inline]
     pub(crate) fn memoize(
         &'e self,
+        owner: &Arc<()>,
         slot: usize,
         compute: impl FnOnce() -> CompiledValueResult<'e>,
     ) -> CompiledValueResult<'e> {
-        let Some(cell) = self.memo.slots.get(slot) else {
+        let cell = match &self.memo.layout {
+            Some(layout) if Arc::ptr_eq(layout.owner(), owner) => self.memo.slots.get(slot),
+            _ => None,
+        };
+        let Some(cell) = cell else {
             return compute();
         };
         let cached = cell.get_or_init(|| {
@@ -611,6 +617,7 @@ impl<'de, U> DeserializeSeed<'de> for &mut ExecutionContext<'de, U> {
                 while let Some(key) = access.next_key::<Cow<'_, str>>()? {
                     if key == "$lists" {
                         // Deserialize lists
+                        self.0.memo.invalidate();
                         access.next_value_seed(ListMatcherSlice(
                             &self.0.scheme,
                             &mut self.0.list_matchers,

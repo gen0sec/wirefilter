@@ -650,3 +650,103 @@ fn memo_and_default_agree_on_builtin_expressions() {
 // `Compiler` is used through its trait methods above; keep the import honest.
 #[allow(dead_code)]
 fn _uses_compiler_trait<C: Compiler>(_: &C) {}
+
+fn compile_one(scheme: &Scheme, compiler: &mut MemoCompiler<()>, expr: &str) -> Filter {
+    scheme.parse(expr).unwrap().compile_with_compiler(compiler)
+}
+
+#[test]
+fn context_of_another_compiler_is_never_read() {
+    let f = fixture();
+    let mut comp_a = MemoCompiler::<()>::new();
+    let mut comp_b = MemoCompiler::<()>::new();
+    let fa = compile_one(&f.scheme, &mut comp_a, r#"cnt_lower(a) == "abc""#);
+    let fb = compile_one(&f.scheme, &mut comp_b, r#"cnt_lower(b) == "abc""#);
+    let layout_a = comp_a.layout();
+
+    for order in [[&fa, &fb], [&fb, &fa]] {
+        let mut ctx = ExecutionContext::new_with_memo(&f.scheme, &layout_a);
+        set(&mut ctx, "a", "ABC").unwrap();
+        set(&mut ctx, "b", "zzz").unwrap();
+        let got: Vec<_> = order.iter().map(|x| x.execute(&ctx).unwrap()).collect();
+        let want: Vec<_> = order.iter().map(|x| std::ptr::eq(*x, &fa)).collect();
+        assert_eq!(got, want);
+    }
+}
+
+#[test]
+fn context_of_the_same_compiler_hits_across_layouts() {
+    let f = fixture();
+    let mut compiler = MemoCompiler::<()>::new();
+    let first = compile_one(&f.scheme, &mut compiler, r#"cnt_lower(a) == "abc""#);
+    let old_layout = compiler.layout();
+    let _later = compile_one(&f.scheme, &mut compiler, r#"cnt_lower(b) == "xyz""#);
+    assert_ne!(old_layout, compiler.layout());
+
+    let ctx = memo_ctx(&f.scheme, &old_layout);
+    assert!(first.execute(&ctx).unwrap());
+    assert!(first.execute(&ctx).unwrap());
+    assert_eq!(count(&f.lower), 1);
+}
+
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+struct FlagMatcher {
+    hit: bool,
+}
+
+impl wirefilter::ListMatcher for FlagMatcher {
+    fn match_value(&self, _: &str, _: &LhsValue<'_>) -> bool {
+        self.hit
+    }
+
+    fn clear(&mut self) {
+        self.hit = false;
+    }
+}
+
+#[derive(Debug)]
+struct FlagList;
+
+impl wirefilter::ListDefinition for FlagList {
+    fn deserialize_matcher<'de>(
+        &self,
+        _: Type,
+        deserializer: &mut dyn erased_serde::Deserializer<'de>,
+    ) -> Result<Box<dyn wirefilter::ListMatcher>, erased_serde::Error> {
+        Ok(Box::new(erased_serde::deserialize::<FlagMatcher>(
+            deserializer,
+        )?))
+    }
+
+    fn new_matcher(&self) -> Box<dyn wirefilter::ListMatcher> {
+        Box::new(FlagMatcher::default())
+    }
+}
+
+#[test]
+fn list_only_deserialize_invalidates_the_memo() {
+    use serde::de::DeserializeSeed;
+
+    let mut b = SchemeBuilder::new();
+    b.add_field("arr", Type::Array(Type::Bytes.into())).unwrap();
+    b.add_function("any", AnyFunction::default()).unwrap();
+    b.add_list(Type::Bytes, FlagList).unwrap();
+    let scheme = b.build();
+
+    let mut compiler = MemoCompiler::<()>::new();
+    let filter = compile_one(&scheme, &mut compiler, "any(arr[*] in $l)");
+    let layout = compiler.layout();
+    assert_eq!(layout.slot_count(), 1);
+
+    let mut ctx = ExecutionContext::new_with_memo(&scheme, &layout);
+    let mut arr = TypedArray::<&str>::new();
+    arr.push("x");
+    ctx.set_field_value(scheme.get_field("arr").unwrap(), arr)
+        .unwrap();
+    assert!(!filter.execute(&ctx).unwrap());
+
+    let mut de =
+        serde_json::Deserializer::from_str(r#"{"$lists":[{"type":"Bytes","data":{"hit":true}}]}"#);
+    (&mut ctx).deserialize(&mut de).unwrap();
+    assert!(filter.execute(&ctx).unwrap());
+}
