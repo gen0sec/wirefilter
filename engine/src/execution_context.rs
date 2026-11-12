@@ -73,6 +73,23 @@ impl Memo {
     }
 }
 
+impl Memo {
+    /// Forgets the cached results of the calls that read the field at `index`.
+    #[inline]
+    fn invalidate_field(&mut self, index: usize) {
+        if !*self.used.get_mut() {
+            return;
+        }
+        if let Some(layout) = &self.layout {
+            for &slot in layout.dependents(index) {
+                if let Some(cell) = self.slots.get_mut(slot) {
+                    cell.take();
+                }
+            }
+        }
+    }
+}
+
 impl Clone for Memo {
     fn clone(&self) -> Self {
         Self {
@@ -214,7 +231,7 @@ impl<'e, U> ExecutionContext<'e, U> {
         let value_type = value.get_type();
 
         if field_type == value_type {
-            self.memo.invalidate();
+            self.memo.invalidate_field(field.index());
             Ok(self.values[field.index()].replace(value))
         } else {
             Err(SetFieldValueError::TypeMismatch(TypeMismatchError {
@@ -240,7 +257,7 @@ impl<'e, U> ExecutionContext<'e, U> {
         let value_type = value.get_type();
 
         if field_type == value_type {
-            self.memo.invalidate();
+            self.memo.invalidate_field(field.index());
             Ok(self.values[field.index()].replace(value))
         } else {
             Err(SetFieldValueError::TypeMismatch(TypeMismatchError {
