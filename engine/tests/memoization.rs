@@ -888,3 +888,51 @@ fn clear_and_list_change_still_drop_every_slot() {
     assert_eq!(run_all(&filters, &ctx), vec![true, true]);
     assert_eq!((count(&f.konst), count(&f.lower)), (3, 3));
 }
+
+#[test]
+fn repeated_call_keeps_later_slot_dependents() {
+    let f = fixture();
+    let (filters, layout) = memo_filters(
+        &f.scheme,
+        &[
+            r#"cnt_lower(a) == "abc""#,
+            r#"cnt_lower(a) == "zzz""#,
+            r#"cnt_upper(b) == "XYZ""#,
+        ],
+    );
+    let mut ctx = memo_ctx(&f.scheme, &layout);
+    assert_eq!(layout.slot_count(), 2, "the second filter reuses the slot");
+    assert_eq!(run_all(&filters, &ctx), vec![true, false, true]);
+    set(&mut ctx, "b", "other").unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![true, false, false]);
+    set(&mut ctx, "a", "ZZZ").unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![false, true, false]);
+}
+
+#[test]
+fn field_in_logical_argument_is_invalidated() {
+    let f = fixture();
+    let (filters, layout) = memo_filters(
+        &f.scheme,
+        &[
+            r#"any(arr[*] == "x")"#,
+            r#"any(cnt_lower(arr[*])[*] == "x")"#,
+            r#"all(cnt_lower(arr[*])[*] == "x")"#,
+        ],
+    );
+    let mut ctx = ExecutionContext::new_with_memo(&f.scheme, &layout);
+    let arr_field = f.scheme.get_field("arr").unwrap();
+    let arrays: [(&[&str], [bool; 3]); 3] = [
+        (&["X"], [false, true, true]),
+        (&["x"], [true, true, true]),
+        (&["x", "y"], [true, true, false]),
+    ];
+    for (values, expected) in arrays {
+        let mut arr = TypedArray::<&str>::new();
+        for v in values {
+            arr.push(v);
+        }
+        ctx.set_field_value(arr_field, arr).unwrap();
+        assert_eq!(run_all(&filters, &ctx), expected.to_vec(), "{values:?}");
+    }
+}
