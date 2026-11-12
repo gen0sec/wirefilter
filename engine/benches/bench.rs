@@ -294,6 +294,64 @@ fn bench_memo_shared_call(c: &mut Criterion) {
     group.finish();
 }
 
+/// One filter per field, each running `lower(url_decode(xi, "r"))`. Each
+/// iteration sets the first field only and runs every filter, so the memoized
+/// variant recomputes one call and reuses the rest.
+fn bench_memo_set_one_field(c: &mut Criterion) {
+    let mut builder = SchemeBuilder::new();
+    for i in 0..8 {
+        builder.add_field(format!("x{i}"), Type::Bytes).unwrap();
+    }
+    builder
+        .add_function("lower", LowerFunction::default())
+        .unwrap();
+    builder
+        .add_function("url_decode", UrlDecodeFunction::default())
+        .unwrap();
+    let scheme = builder.build();
+    let value = "%2561dmin%252F..%252F..%252FETC%252Fpasswd%3Cscript%3E";
+    let exprs: Vec<String> = (0..8)
+        .map(|i| format!(r#"lower(url_decode(x{i}, "r")) contains "needle""#))
+        .collect();
+    let first = scheme.get_field("x0").unwrap();
+
+    let mut group = c.benchmark_group("memo_set_one_field");
+
+    let mut default = DefaultCompiler::<()>::new();
+    let filters: Vec<Filter> = exprs
+        .iter()
+        .map(|e| scheme.parse(e).unwrap().compile_with_compiler(&mut default))
+        .collect();
+    let mut ctx = ExecutionContext::new(&scheme);
+    for f in scheme.fields() {
+        ctx.set_field_value(f, value).unwrap();
+    }
+    group.bench_function("default", |b| {
+        b.iter(|| {
+            ctx.set_field_value(first, value).unwrap();
+            filters.iter().filter(|f| f.execute(&ctx).unwrap()).count()
+        })
+    });
+
+    let mut memo = MemoCompiler::<()>::new();
+    let filters: Vec<Filter> = exprs
+        .iter()
+        .map(|e| scheme.parse(e).unwrap().compile_with_compiler(&mut memo))
+        .collect();
+    let layout = memo.layout();
+    let mut ctx = ExecutionContext::new_with_memo(&scheme, &layout);
+    for f in scheme.fields() {
+        ctx.set_field_value(f, value).unwrap();
+    }
+    group.bench_function("memo", |b| {
+        b.iter(|| {
+            ctx.set_field_value(first, value).unwrap();
+            filters.iter().filter(|f| f.execute(&ctx).unwrap()).count()
+        })
+    });
+    group.finish();
+}
+
 /// ~16 KiB inputs through the builtin `url_decode` and `lower`.
 fn bench_decode_lower_16k(c: &mut Criterion) {
     let mut builder = SchemeBuilder::new();
@@ -353,6 +411,7 @@ criterion_group! {
         bench_string_matches,
         bench_string_function_comparison,
         bench_memo_shared_call,
+        bench_memo_set_one_field,
         bench_decode_lower_16k,
 }
 

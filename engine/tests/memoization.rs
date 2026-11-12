@@ -7,8 +7,25 @@ use wirefilter::{
     AllFunction, AlwaysList, AnyFunction, Compiler, DefaultCompiler, ExecutionContext, Filter,
     FunctionArgs, FunctionDefinition, FunctionDefinitionContext, FunctionParam, FunctionParamError,
     LhsValue, LowerFunction, MemoCompiler, MemoLayout, ParserSettings, Scheme, SchemeBuilder,
-    SetFieldValueError, Type, TypedArray, TypedMap, UpperFunction, UrlDecodeFunction,
+    SetFieldValueError, SimpleFunctionArgKind, SimpleFunctionDefinition, SimpleFunctionImpl,
+    SimpleFunctionParam, Type, TypedArray, TypedMap, UpperFunction, UrlDecodeFunction,
 };
+
+fn echo_literal<'a>(args: FunctionArgs<'_, 'a>) -> Option<LhsValue<'a>> {
+    args.next()?.ok()
+}
+
+fn literal_only() -> SimpleFunctionDefinition {
+    SimpleFunctionDefinition {
+        params: vec![SimpleFunctionParam {
+            arg_kind: SimpleFunctionArgKind::Literal,
+            val_type: Type::Bytes,
+        }],
+        opt_params: vec![],
+        return_type: Type::Bytes,
+        implementation: SimpleFunctionImpl::new(echo_literal),
+    }
+}
 
 /// Wraps a real function, counts executions and chooses its own purity.
 #[derive(Debug)]
@@ -83,6 +100,7 @@ struct Fixture {
     lower: Arc<AtomicUsize>,
     upper: Arc<AtomicUsize>,
     decode: Arc<AtomicUsize>,
+    konst: Arc<AtomicUsize>,
     impure_lower: Arc<AtomicUsize>,
     impure_upper: Arc<AtomicUsize>,
 }
@@ -96,6 +114,7 @@ fn fixture() -> Fixture {
     let (lower, lower_calls) = Counting::new(LowerFunction::default(), true);
     let (upper, upper_calls) = Counting::new(UpperFunction::default(), true);
     let (decode, decode_calls) = Counting::new(UrlDecodeFunction::default(), true);
+    let (konst, konst_calls) = Counting::new(literal_only(), true);
     let (impure_lower, impure_lower_calls) = Counting::new(LowerFunction::default(), false);
     let (impure_upper, impure_upper_calls) = Counting::new(UpperFunction::default(), false);
     b.add_function("any", AnyFunction::default()).unwrap();
@@ -103,6 +122,7 @@ fn fixture() -> Fixture {
     b.add_function("cnt_lower", lower).unwrap();
     b.add_function("cnt_upper", upper).unwrap();
     b.add_function("cnt_decode", decode).unwrap();
+    b.add_function("cnt_const", konst).unwrap();
     b.add_function("impure_lower", impure_lower).unwrap();
     b.add_function("impure_upper", impure_upper).unwrap();
     b.add_list(Type::Ip, AlwaysList {}).unwrap();
@@ -111,6 +131,7 @@ fn fixture() -> Fixture {
         lower: lower_calls,
         upper: upper_calls,
         decode: decode_calls,
+        konst: konst_calls,
         impure_lower: impure_lower_calls,
         impure_upper: impure_upper_calls,
     }
@@ -749,4 +770,121 @@ fn list_only_deserialize_invalidates_the_memo() {
         serde_json::Deserializer::from_str(r#"{"$lists":[{"type":"Bytes","data":{"hit":true}}]}"#);
     (&mut ctx).deserialize(&mut de).unwrap();
     assert!(filter.execute(&ctx).unwrap());
+}
+
+#[test]
+fn setting_another_field_keeps_the_slot_cached() {
+    let f = fixture();
+    let (filters, layout) = memo_filters(&f.scheme, &[r#"cnt_lower(a) == "abc""#]);
+    let mut ctx = memo_ctx(&f.scheme, &layout);
+    assert_eq!(run_all(&filters, &ctx), vec![true]);
+    set(&mut ctx, "b", "OTHER").unwrap();
+    ctx.set_field_value_from_name("b", "MORE").unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![true]);
+    assert_eq!(count(&f.lower), 1, "b does not feed lower(a)");
+    set(&mut ctx, "a", "ABC").unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![true]);
+    assert_eq!(count(&f.lower), 2, "a does");
+}
+
+#[test]
+fn only_the_dependent_slots_are_dropped() {
+    let f = fixture();
+    let (filters, layout) = memo_filters(
+        &f.scheme,
+        &[r#"cnt_lower(a) == "abc""#, r#"cnt_upper(b) == "XYZ""#],
+    );
+    let mut ctx = memo_ctx(&f.scheme, &layout);
+    assert_eq!(run_all(&filters, &ctx), vec![true, true]);
+    set(&mut ctx, "b", "xyz").unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![true, true]);
+    assert_eq!(count(&f.lower), 1);
+    assert_eq!(count(&f.upper), 2);
+}
+
+#[test]
+fn nested_dependents_are_invalidated() {
+    let f = fixture();
+    let (filters, layout) = memo_filters(
+        &f.scheme,
+        &[
+            r#"cnt_lower(cnt_decode(a)) == "abc""#,
+            r#"cnt_lower(m["x"]) == "v""#,
+            r#"cnt_lower(cnt_upper(cnt_decode(b))) == "xyz""#,
+        ],
+    );
+    let mut ctx = memo_ctx(&f.scheme, &layout);
+    let mut m = TypedMap::<&str>::new();
+    m.insert(b"x".to_vec().into(), "V");
+    ctx.set_field_value(f.scheme.get_field("m").unwrap(), m)
+        .unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![true, true, true]);
+    let before = count(&f.lower);
+
+    // a: the outer call of filter 0 and nothing else.
+    set(&mut ctx, "a", "ABC").unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![true, true, true]);
+    assert_eq!(count(&f.lower), before + 1);
+    assert_eq!(
+        count(&f.decode),
+        3,
+        "decode(a) was recomputed, decode(b) not"
+    );
+
+    // b: reached only through two nested calls.
+    set(&mut ctx, "b", "XYZ").unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![true, true, true]);
+    assert_eq!(count(&f.lower), before + 2);
+
+    // m: reached through an index inside the argument.
+    let mut m = TypedMap::<&str>::new();
+    m.insert(b"x".to_vec().into(), "V");
+    ctx.set_field_value(f.scheme.get_field("m").unwrap(), m)
+        .unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![true, true, true]);
+    assert_eq!(count(&f.lower), before + 3);
+}
+
+#[test]
+fn a_new_value_is_seen_through_a_nested_call() {
+    let f = fixture();
+    let (filters, layout) = memo_filters(&f.scheme, &[r#"cnt_lower(cnt_decode(a)) == "abc""#]);
+    let mut ctx = memo_ctx(&f.scheme, &layout);
+    assert_eq!(run_all(&filters, &ctx), vec![true]);
+    set(&mut ctx, "a", "other").unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![false]);
+}
+
+#[test]
+fn constant_only_slot_is_never_invalidated() {
+    let f = fixture();
+    let (filters, layout) = memo_filters(&f.scheme, &[r#"cnt_const("ABC") == "ABC""#]);
+    let mut ctx = memo_ctx(&f.scheme, &layout);
+    assert_eq!(layout.slot_count(), 1);
+    assert_eq!(run_all(&filters, &ctx), vec![true]);
+    set(&mut ctx, "a", "x").unwrap();
+    set(&mut ctx, "b", "y").unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![true]);
+    assert_eq!(count(&f.konst), 1);
+}
+
+#[test]
+fn clear_and_list_change_still_drop_every_slot() {
+    let f = fixture();
+    let (filters, layout) = memo_filters(
+        &f.scheme,
+        &[r#"cnt_const("ABC") == "ABC""#, r#"cnt_lower(a) == "abc""#],
+    );
+    let mut ctx = memo_ctx(&f.scheme, &layout);
+    assert_eq!(run_all(&filters, &ctx), vec![true, true]);
+    assert_eq!((count(&f.konst), count(&f.lower)), (1, 1));
+
+    let _ = ctx.get_list_matcher_mut_from_type(&Type::Ip).unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![true, true]);
+    assert_eq!((count(&f.konst), count(&f.lower)), (2, 2));
+
+    ctx.clear();
+    set(&mut ctx, "a", "ABC").unwrap();
+    assert_eq!(run_all(&filters, &ctx), vec![true, true]);
+    assert_eq!((count(&f.konst), count(&f.lower)), (3, 3));
 }
