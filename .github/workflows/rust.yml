@@ -13,7 +13,7 @@ env:
   CARGO_REGISTRIES_GEN0SEC_CREDENTIAL_PROVIDER: cargo:token
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-8
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7
@@ -33,7 +33,7 @@ jobs:
         run: cargo clippy --verbose --all-targets -- -D clippy::all
 
   fmt:
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7
@@ -52,7 +52,7 @@ jobs:
 
   doc:
     name: Documentation
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
     env:
       RUSTDOCFLAGS: -D warnings
     steps:
@@ -72,7 +72,7 @@ jobs:
 
   miri-test:
     name: Test with miri
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-8
     env:
       MIRIFLAGS: -Zmiri-disable-isolation
     steps:
@@ -86,7 +86,7 @@ jobs:
 
   sanitizer-test:
     name: Test with -Zsanitizer=${{ matrix.sanitizer }}
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-8
     strategy:
       fail-fast: false
       matrix:
